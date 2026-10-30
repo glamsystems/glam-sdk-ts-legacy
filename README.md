@@ -18,6 +18,6 @@ npm i @glamsystems/glam-sdk
 
 ## Examples
 
-[GLAM CLI](https://github.com/glamsystems/glam-cli) is built with the GLAM SDK.
+[GLAM CLI](https://github.com/glamsystems/glam-cli-legacy) is built with the GLAM SDK.
 
 See other [examples](./examples).
