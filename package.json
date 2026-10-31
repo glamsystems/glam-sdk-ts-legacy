@@ -62,7 +62,7 @@
     "zod": "4.6.7"
   },
   "engines": {
-    "node": "^24.22.1"
+    "node": "^24.22.1 || ^26.12.1"
   },
   "devDependencies": {
     "@types/node": "^20.17.30",
