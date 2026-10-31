@@ -9,8 +9,15 @@ A TypeScript SDK for building applications on the GLAM Protocol.
 ## Installation
 
 ```bash
-npm i @glamsystems/glam-sdk
+npm i --save-exact @glamsystems/glam-sdk
 ```
+
+## Versioning
+
+Minor releases can include breaking changes, including within 1.x. Patch
+releases contain fixes. Breaking changes are identified in the release notes.
+Pin an exact SDK version and read those notes before upgrading. A range such
+as `^1.1.2` can accept a breaking minor release.
 
 ## Getting Started
 
