@@ -424,6 +424,19 @@ const feeStructureOf = (fees: FeeRates) => ({
               return [await client.vault.wrap(new BN(step.amount!))];
             case "unwrap":
               return [await client.vault.unwrap()];
+            case "setTimelock":
+              return [await client.timelock.set(Number(step.durationSeconds!))];
+            case "stageUpdate":
+              return [
+                await client.state.update({
+                  name: nameToChars(step.update!.name),
+                }),
+              ];
+            // A tokenized vault's apply goes through glam_mint's
+            // update_mint_apply_timelock, which the legacy client selects
+            // from the State's account type.
+            case "applyTimelock":
+              return [await client.timelock.apply()];
           }
         };
         const queue = async () =>
@@ -446,6 +459,16 @@ const feeStructureOf = (fees: FeeRates) => ({
           claimable: record(await managerClient.fees.getClaimableFees()),
           claimed: record(await managerClient.fees.getClaimedFees()),
         });
+        // The stored name bytes, the live duration and the stored expiry. The
+        // observer decodes the name the same way for both sides.
+        const state = async () => {
+          const account = await managerClient.fetchStateAccount();
+          return {
+            nameBytes: Array.from(account.name),
+            timelockDurationSeconds: account.timelockDuration,
+            timelockExpiresAt: account.timelockExpiresAt.toString(),
+          };
+        };
         const result = await runExecuted(
           scenario,
           {
@@ -458,6 +481,7 @@ const feeStructureOf = (fees: FeeRates) => ({
             run,
             queue,
             feeLedger,
+            state,
           },
           url,
         );
