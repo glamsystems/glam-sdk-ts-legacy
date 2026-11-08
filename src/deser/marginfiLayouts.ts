@@ -15,6 +15,7 @@ const BANK_INTEGRATION_ACC_1_OFFSET = 1560;
 const BANK_INTEGRATION_ACC_2_OFFSET = 1592;
 const BANK_ORACLE_KEYS_LEN = 5;
 
+const MARGINFI_ACCOUNT_GROUP_OFFSET = 8;
 const MARGINFI_ACCOUNT_BALANCES_OFFSET = 72;
 const MARGINFI_ACCOUNT_BALANCE_LEN = 104;
 const MARGINFI_ACCOUNT_BALANCES_LEN = 16;
@@ -75,4 +76,10 @@ export function decodeMarginfiBalances(data: Buffer): DecodedMarginfiBalance[] {
       bank: readPublicKey(data, offset + MARGINFI_BALANCE_BANK_OFFSET),
     };
   });
+}
+
+export function decodeMarginfiAccountGroup(data: Buffer): PublicKey {
+  assertDiscriminator(data, MARGINFI_ACCOUNT_DISCRIMINATOR, "Marginfi account");
+
+  return readPublicKey(data, MARGINFI_ACCOUNT_GROUP_OFFSET);
 }

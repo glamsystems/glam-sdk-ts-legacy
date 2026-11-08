@@ -1,4 +1,5 @@
 import {
+  AccountMeta,
   ComputeBudgetProgram,
   PublicKey,
   SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -23,9 +24,11 @@ import {
   PHOENIX_LOG_AUTHORITY,
   PHOENIX_PROGRAM_ID,
   SEED_OBSERVATION_STATE,
+  SPL_STAKE_POOL_PROGRAM_ID,
   USDC,
   WSOL,
 } from "../../src/constants";
+import { STAKE_POOLS } from "../../src/assets";
 import {
   RPI_PROTOCOL,
   BRIDGE_CCTP_PROTOCOL,
@@ -1353,6 +1356,226 @@ describe("Pricing chunk Kamino reserve reporting", () => {
     expect(ixs).toHaveLength(2);
     expect(ixs[0].programId.equals(KAMINO_LENDING_PROGRAM)).toBe(true);
     expect(ixs[1].programId.equals(EXT_NEUTRAL)).toBe(true);
+  });
+});
+
+describe("Pricing reads at an endpoint that refuses more than 100 keys per request", () => {
+  /** A getMultipleAccountsInfo that refuses more than 100 keys, as the endpoint does. */
+  function limitedRead(answer: (key: PublicKey) => unknown) {
+    return jest.fn(async (keys: PublicKey[]) => {
+      if (keys.length > 100) {
+        throw new Error("Too many inputs provided; max 100");
+      }
+      return keys.map(answer);
+    });
+  }
+
+  function expectNoReadOver100(read: jest.Mock) {
+    expect(read).toHaveBeenCalled();
+    for (const [keys] of read.mock.calls) {
+      expect(keys.length).toBeLessThanOrEqual(100);
+    }
+  }
+
+  /** A client whose base holds only `base` and the default oracle lookups. */
+  function readOnlyClient(base: Record<string, unknown>) {
+    return new PriceClient(
+      {
+        vaultPda: VAULT,
+        statePda: STATE,
+        ...oracleLookups([]),
+        ...base,
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      (() => undefined) as any,
+    );
+  }
+
+  it("prices liquid staking tokens over more than 50 pool states", async () => {
+    const seen = new Set<string>();
+    const pools = STAKE_POOLS.filter(({ isMarinade, poolState }) => {
+      const key = poolState.toBase58();
+      if (isMarinade || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 60);
+    expect(pools).toHaveLength(60);
+    const mintByPoolState = new Map(
+      pools.map(({ mint, poolState }) => [poolState.toBase58(), mint]),
+    );
+    const mints = new Set(pools.map(({ mint }) => mint));
+    const getMultipleAccountsInfo = limitedRead((key) => {
+      const poolMint = mintByPoolState.get(key.toBase58());
+      if (poolMint) {
+        // A 282 byte stake pool prefix: type 1 in byte 0, pool mint at 162.
+        const data = Buffer.alloc(282);
+        data[0] = 1;
+        new PublicKey(poolMint).toBuffer().copy(data, 162);
+        return accountInfo(SPL_STAKE_POOL_PROGRAM_ID, data);
+      }
+      return mints.has(key.toBase58())
+        ? accountInfo(TOKEN_PROGRAM_ID, Buffer.alloc(82))
+        : null;
+    });
+    const client = readOnlyClient({
+      connection: { getMultipleAccountsInfo },
+      getVaultAta: jest.fn(() => PublicKey.default),
+    });
+
+    const oracles = await (client as any).lstPoolStateOracles(
+      pools.map(({ mint }) => new PublicKey(mint)),
+    );
+
+    expectNoReadOver100(getMultipleAccountsInfo);
+    const last = pools[pools.length - 1];
+    expect(oracles.size).toBe(60);
+    expect(
+      oracles.get(new PublicKey(last.mint)).poolState.equals(last.poolState),
+    ).toBe(true);
+  });
+
+  it("finds no Marginfi account among more than 100 external positions", async () => {
+    const externalPositions = Array.from({ length: 150 }, () =>
+      PublicKey.unique(),
+    );
+    const getMultipleAccountsInfo = limitedRead(() =>
+      accountInfo(TOKEN_PROGRAM_ID),
+    );
+    const client = readOnlyClient({
+      connection: { getMultipleAccountsInfo },
+    });
+
+    await expect(
+      (client as any).priceMarginfiAccountsIx({
+        baseAssetMint: PublicKey.default,
+        externalPositions,
+      }),
+    ).resolves.toBeNull();
+    expectNoReadOver100(getMultipleAccountsInfo);
+  });
+
+  it("reads more than 100 Jupiter Earn share accounts", async () => {
+    const jupiterEarnAtas = Array.from({ length: 150 }, () =>
+      PublicKey.unique(),
+    );
+    const getMultipleAccountsInfo = limitedRead(() => null);
+    const client = readOnlyClient({
+      connection: { getMultipleAccountsInfo },
+    });
+    jest
+      .spyOn(client as any, "categorizeExternalPositions")
+      .mockResolvedValue({ jupiterEarnAtas });
+
+    await expect(
+      client.priceJupiterEarnPositionsIxs({
+        baseAssetMint: PublicKey.default,
+        externalPositions: jupiterEarnAtas,
+      } as any),
+    ).rejects.toThrow(
+      new Error(
+        `Jupiter Earn fToken account not found: ${jupiterEarnAtas[0].toBase58()}`,
+      ),
+    );
+    expectNoReadOver100(getMultipleAccountsInfo);
+  });
+
+  it("reads at most 100 keys per request and prices a Kamino vault share account past the first hundred", async () => {
+    const kvaults = Array.from({ length: 150 }, () => ({
+      sharesMint: PublicKey.unique(),
+      shareAta: PublicKey.unique(),
+    }));
+    const tracked = kvaults[130];
+    const tokenMint = PublicKey.unique();
+    const depositOracle = PublicKey.unique();
+    const kvaultPda = PublicKey.unique();
+    const shareAtaByMint = new Map(
+      kvaults.map(({ sharesMint, shareAta }) => [
+        sharesMint.toBase58(),
+        shareAta,
+      ]),
+    );
+    const stateModel = {
+      accountType: StateAccountType.VAULT,
+      baseAssetMint: PublicKey.default,
+      externalPositions: [tracked.shareAta],
+    };
+    const getMultipleAccountsInfo = limitedRead((key) =>
+      key.equals(tracked.shareAta) ? accountInfo(TOKEN_PROGRAM_ID) : null,
+    );
+    const priceKaminoVaultShares = jest.fn(() => methodBuilder(ix(5)));
+    const client = new PriceClient(
+      {
+        vaultPda: VAULT,
+        statePda: STATE,
+        connection: { getMultipleAccountsInfo },
+        fetchStateModel: jest.fn(async () => stateModel),
+        fetchAssetMetas: jest.fn(
+          async () =>
+            new PkMap([
+              [
+                tokenMint,
+                {
+                  asset: tokenMint,
+                  decimals: 6,
+                  programId: TOKEN_PROGRAM_ID,
+                  ...PYTH(depositOracle),
+                },
+              ],
+            ]),
+        ),
+        getVaultAta: jest.fn((mint: PublicKey) =>
+          shareAtaByMint.get(mint.toBase58()),
+        ),
+        ...oracleLookups([]),
+        mintProgram: { methods: { priceKaminoVaultShares } },
+      } as any,
+      {} as any,
+      {
+        findAndParseKaminoVaults: jest.fn(async () =>
+          kvaults.map(({ sharesMint }) => ({
+            sharesMint,
+            tokenMint,
+            vaultLookupTable: PublicKey.unique(),
+            vaultAllocationStrategy: [{ reserve: RESERVE_A }],
+          })),
+        ),
+        getVaultPdasByShareMints: jest.fn(async () => [kvaultPda]),
+        composeRemainingAccounts: jest.fn(
+          (allocations: { reserve: PublicKey }[]) =>
+            allocations.flatMap(({ reserve }) => [
+              { pubkey: MARKET, isSigner: false, isWritable: false },
+              { pubkey: reserve, isSigner: false, isWritable: false },
+            ]),
+        ),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      (() => undefined) as any,
+    );
+    client.cachedStateModel = stateModel as any;
+
+    const chunk = await client.priceKaminoVaultSharesIx();
+
+    expectNoReadOver100(getMultipleAccountsInfo);
+    expect(chunk!.ixs).toHaveLength(1);
+    expect(priceKaminoVaultShares).toHaveBeenCalledWith(1);
+    const builder = priceKaminoVaultShares.mock.results[0].value;
+    const remaining: AccountMeta[] = builder.remainingAccounts.mock.calls[0][0];
+    expectPubkeys(
+      remaining.slice(0, 4).map(({ pubkey }) => pubkey),
+      [tracked.shareAta, tracked.sharesMint, kvaultPda, depositOracle],
+    );
   });
 });
 

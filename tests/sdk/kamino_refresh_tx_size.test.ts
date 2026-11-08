@@ -742,6 +742,7 @@ function makePriceClient(setup: PricingSetup) {
           programId: MARGINFI_PROGRAM_ID,
           keys: [
             { pubkey: marginfiAccount, isSigner: false, isWritable: true },
+            { pubkey: PublicKey.unique(), isSigner: false, isWritable: false },
           ],
           data: Buffer.alloc(8, 3),
         }),
@@ -1197,12 +1198,12 @@ describe("Kamino reserve refresh transaction sizes", () => {
     // transaction needs its lookup tables, before the refresh and after it.
     expect(row.before).toBeGreaterThan(TRANSACTION_SIZE_LIMIT);
     expect(row.after).toBeGreaterThan(TRANSACTION_SIZE_LIMIT);
-    // What is left: 139 bytes under the packet with the lookup table (the
+    // What is left: 137 bytes under the packet with the lookup table (the
     // bridge pricer reads the SOL/USD oracle the vault-token pricer already
-    // carries: one more index byte, no new key), and three account keys
-    // under version 1.
-    expect(row.afterWithAlt).toBe(TRANSACTION_SIZE_LIMIT - 139);
-    expect(row.v1After.accounts).toBe(V1_MAX_ACCOUNT_KEYS - 3);
+    // carries: one more index byte and no new key, and the marginfi pulse names
+    // its group: one more key), and two account keys under version 1.
+    expect(row.afterWithAlt).toBe(TRANSACTION_SIZE_LIMIT - 137);
+    expect(row.v1After.accounts).toBe(V1_MAX_ACCOUNT_KEYS - 2);
 
     remainingAccountsSpy.mockRestore();
     decodeSpy.mockRestore();

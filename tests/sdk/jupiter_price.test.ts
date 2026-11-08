@@ -43,11 +43,11 @@ import {
   VAULT_CONFIG_BORROW_TOKEN_OFFSET,
   VAULT_CONFIG_DISCRIMINATOR,
   VAULT_CONFIG_SUPPLY_TOKEN_OFFSET,
-  getFTokenMintPda,
-  getLendingPda,
   getPositionMintPda,
   getPositionPda,
+  getTokenReservePda,
   getVaultConfigPda,
+  getVaultStatePda,
 } from "../../src/client/jupiter-lend/shared";
 
 const STATE = PublicKey.unique();
@@ -57,6 +57,11 @@ const SOL_ORACLE = PublicKey.unique();
 const EXT_JUPITER = PublicKey.unique();
 const PROTOCOL_PROGRAM = PublicKey.unique();
 const BASE_MINT = PublicKey.unique();
+const OTHER_MINT = PublicKey.unique();
+const CBBTC_MINT = new PublicKey("cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij");
+const CBBTC_LIQUIDITY_RESERVE = new PublicKey(
+  "DALcPrc81yGgwqaBuuCRXtEU8PHFLv2xEgWyhnfvbVKH",
+);
 
 function accountInfo(owner: PublicKey, data: Buffer = Buffer.alloc(0)) {
   return {
@@ -146,6 +151,14 @@ function tokenReserveData(mint: PublicKey, vault = PublicKey.unique()) {
   mint.toBuffer().copy(data, 8);
   vault.toBuffer().copy(data, TOKEN_RESERVE_VAULT_OFFSET);
   return data;
+}
+
+/** The liquidity program's TokenReserve address for `mint`. */
+function liquidityReserveAddress(mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("reserve"), mint.toBuffer()],
+    JUPITER_LIQUIDITY_PROGRAM_ID,
+  )[0];
 }
 
 /** The named accounts of an ext-hosted pricer over this test's vault. */
@@ -268,14 +281,19 @@ function jupiterEarnFixture(
   return { client, fTokenAta, lending };
 }
 
+type BorrowFixtureAccount = ReturnType<typeof accountInfo> | null;
+
 /**
  * A vault holding one Jupiter Borrow position over a supply and a borrow
- * asset.
+ * asset. Neither token has an Earn market, so neither has a Lending account.
+ * Both tokens have a TokenReserve at the liquidity program's derived address,
+ * and `supplyReserveAccount` replaces the supply token's one.
  */
 function jupiterBorrowFixture(
   roles: { sol: OracleSpec; base: OracleSpec },
   supply: OracleSpec,
   borrow: OracleSpec,
+  supplyReserveAccount?: (supplyToken: PublicKey) => BorrowFixtureAccount,
 ) {
   const vaultId = 11;
   const nftId = 7;
@@ -284,19 +302,12 @@ function jupiterBorrowFixture(
   const positionTokenAccount = PublicKey.unique();
   const supplyToken = PublicKey.unique();
   const borrowToken = PublicKey.unique();
-  const supplyReserve = PublicKey.unique();
-  const borrowReserve = PublicKey.unique();
+  const supplyReserve = liquidityReserveAddress(supplyToken);
+  const borrowReserve = liquidityReserveAddress(borrowToken);
   const vaultConfig = getVaultConfigPda(vaultId);
-  const supplyLending = getLendingPda(
-    supplyToken,
-    getFTokenMintPda(supplyToken),
-  );
-  const borrowLending = getLendingPda(
-    borrowToken,
-    getFTokenMintPda(borrowToken),
-  );
+  const vaultState = getVaultStatePda(vaultId);
 
-  const accountByKey = new Map<string, ReturnType<typeof accountInfo>>([
+  const accountByKey = new Map<string, BorrowFixtureAccount>([
     [
       position.toBase58(),
       accountInfo(
@@ -312,46 +323,29 @@ function jupiterBorrowFixture(
       ),
     ],
     [
-      supplyLending.toBase58(),
-      accountInfo(
-        JUPITER_LENDING_PROGRAM_ID,
-        lendingData({
-          mint: supplyToken,
-          fTokenMint: getFTokenMintPda(supplyToken),
-          reserve: supplyReserve,
-        }),
-      ),
-    ],
-    [
-      borrowLending.toBase58(),
-      accountInfo(
-        JUPITER_LENDING_PROGRAM_ID,
-        lendingData({
-          mint: borrowToken,
-          fTokenMint: getFTokenMintPda(borrowToken),
-          reserve: borrowReserve,
-        }),
-      ),
-    ],
-    [
       supplyReserve.toBase58(),
-      accountInfo(JUPITER_LIQUIDITY_PROGRAM_ID, tokenReserveData(supplyToken)),
+      supplyReserveAccount
+        ? supplyReserveAccount(supplyToken)
+        : accountInfo(
+            JUPITER_LIQUIDITY_PROGRAM_ID,
+            tokenReserveData(supplyToken),
+          ),
     ],
     [
       borrowReserve.toBase58(),
       accountInfo(JUPITER_LIQUIDITY_PROGRAM_ID, tokenReserveData(borrowToken)),
     ],
   ]);
+  const getAccountInfo = jest.fn(
+    async (pubkey: PublicKey) => accountByKey.get(pubkey.toBase58()) ?? null,
+  );
 
   const client = new PriceClient(
     {
       statePda: STATE,
       vaultPda: VAULT,
       connection: {
-        getAccountInfo: jest.fn(
-          async (pubkey: PublicKey) =>
-            accountByKey.get(pubkey.toBase58()) ?? null,
-        ),
+        getAccountInfo,
         getMultipleAccountsInfo: jest.fn(async () => [
           accountInfo(TOKEN_PROGRAM_ID, tokenAccountData(positionMint, VAULT)),
           null,
@@ -386,8 +380,33 @@ function jupiterBorrowFixture(
     .spyOn(client as any, "categorizeExternalPositions")
     .mockResolvedValue({ jupiterBorrowPositions: [position] });
 
-  return { client, position, positionTokenAccount, vaultConfig };
+  return {
+    client,
+    getAccountInfo,
+    position,
+    positionTokenAccount,
+    vaultConfig,
+    vaultState,
+    supplyReserve,
+    borrowReserve,
+  };
 }
+
+describe("Jupiter liquidity TokenReserve address", () => {
+  it("derives the cbBTC reserve that exists on mainnet", () => {
+    expect(getTokenReservePda(CBBTC_MINT)).toEqual(CBBTC_LIQUIDITY_RESERVE);
+    expect(liquidityReserveAddress(CBBTC_MINT)).toEqual(
+      CBBTC_LIQUIDITY_RESERVE,
+    );
+  });
+  it("derives the USDC reserve that the USDC Earn market records on mainnet", () => {
+    expect(
+      getTokenReservePda(
+        new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+      ).toBase58(),
+    ).toBe("94vK29npVbyRHXH63rRcTiSr26SFhrQTzbpNJuhQEDu");
+  });
+});
 
 describe("PositionCategorizer Jupiter lend branches", () => {
   it("separates Jupiter Earn fToken ATAs and Jupiter Borrow positions", async () => {
@@ -484,21 +503,39 @@ describe("PriceClient Jupiter lend pricing builders", () => {
     ]);
   });
 
-  it("prepends update_exchange_prices before Jupiter Borrow pricing", async () => {
+  it("prepends update_exchange_prices over the derived liquidity reserves when the supply token has no Earn market", async () => {
     const supplyOracle = PublicKey.unique();
     const borrowOracle = PublicKey.unique();
-    const { client, position, positionTokenAccount, vaultConfig } =
-      jupiterBorrowFixture(PYTH_ROLES, PYTH(supplyOracle), PYTH(borrowOracle));
+    const {
+      client,
+      getAccountInfo,
+      position,
+      positionTokenAccount,
+      vaultConfig,
+      vaultState,
+      supplyReserve,
+      borrowReserve,
+    } = jupiterBorrowFixture(
+      PYTH_ROLES,
+      PYTH(supplyOracle),
+      PYTH(borrowOracle),
+    );
 
     const chunk = await client.priceJupiterBorrowPositionsIxs();
 
     expect(chunk.ixs).toHaveLength(2);
-    expect(chunk.ixs[0].programId.equals(JUPITER_VAULTS_PROGRAM_ID)).toBe(true);
+    const update = chunk.ixs[0];
+    expect(update.programId.equals(JUPITER_VAULTS_PROGRAM_ID)).toBe(true);
     expect(
-      chunk.ixs[0].data
-        .subarray(0, 8)
-        .equals(UPDATE_EXCHANGE_PRICES_DISCRIMINATOR),
+      update.data.subarray(0, 8).equals(UPDATE_EXCHANGE_PRICES_DISCRIMINATOR),
     ).toBe(true);
+    expect(update.data.readUInt16LE(8)).toBe(11);
+    expect(update.keys).toEqual([
+      { pubkey: vaultState, isSigner: false, isWritable: true },
+      { pubkey: vaultConfig, isSigner: false, isWritable: false },
+      { pubkey: supplyReserve, isSigner: false, isWritable: false },
+      { pubkey: borrowReserve, isSigner: false, isWritable: false },
+    ]);
     const pricing = chunk.ixs[1];
     expect(pricing.programId.equals(EXT_JUPITER)).toBe(true);
     expect(pricing.data).toEqual(
@@ -511,11 +548,88 @@ describe("PriceClient Jupiter lend pricing builders", () => {
       { pubkey: position, isSigner: false, isWritable: false },
       { pubkey: positionTokenAccount, isSigner: false, isWritable: false },
       { pubkey: vaultConfig, isSigner: false, isWritable: false },
-      expect.objectContaining({ isSigner: false, isWritable: false }),
+      { pubkey: vaultState, isSigner: false, isWritable: false },
       expect.objectContaining({ isSigner: false, isWritable: false }),
       { pubkey: supplyOracle, isSigner: false, isWritable: false },
       { pubkey: borrowOracle, isSigner: false, isWritable: false },
     ]);
+    // One read per reserve, and no read of a Lending account.
+    expect(
+      getAccountInfo.mock.calls.map(([pubkey]) => pubkey.toBase58()).sort(),
+    ).toEqual(
+      [position, vaultConfig, supplyReserve, borrowReserve]
+        .map((pubkey) => pubkey.toBase58())
+        .sort(),
+    );
+  });
+
+  const RESERVE_REFUSALS: Array<
+    [
+      string,
+      (supplyToken: PublicKey) => BorrowFixtureAccount,
+      (reserve: PublicKey, supplyToken: PublicKey) => string,
+    ]
+  > = [
+    [
+      "is missing",
+      () => null,
+      (reserve) => `TokenReserve account not found at ${reserve.toBase58()}`,
+    ],
+    [
+      "is owned by another program",
+      (supplyToken) =>
+        accountInfo(JUPITER_LENDING_PROGRAM_ID, tokenReserveData(supplyToken)),
+      (reserve) =>
+        `TokenReserve ${reserve.toBase58()} owned by ${JUPITER_LENDING_PROGRAM_ID.toBase58()}, expected ${JUPITER_LIQUIDITY_PROGRAM_ID.toBase58()}`,
+    ],
+    [
+      "has another discriminator",
+      (supplyToken) => {
+        const data = tokenReserveData(supplyToken);
+        LENDING_DISCRIMINATOR.copy(data, 0);
+        return accountInfo(JUPITER_LIQUIDITY_PROGRAM_ID, data);
+      },
+      (reserve) =>
+        `Account ${reserve.toBase58()} is not a TokenReserve (discriminator mismatch)`,
+    ],
+    [
+      "holds another mint",
+      () =>
+        accountInfo(JUPITER_LIQUIDITY_PROGRAM_ID, tokenReserveData(OTHER_MINT)),
+      (reserve, supplyToken) =>
+        `TokenReserve ${reserve.toBase58()} mint ${OTHER_MINT.toBase58()} does not match expected mint ${supplyToken.toBase58()}`,
+    ],
+  ];
+
+  it.each(RESERVE_REFUSALS)(
+    "refuses Jupiter Borrow pricing when the supply reserve %s",
+    async (_case, supplyReserveAccount, message) => {
+      let supplyToken = PublicKey.default;
+      const { client, supplyReserve } = jupiterBorrowFixture(
+        PYTH_ROLES,
+        PYTH(PublicKey.unique()),
+        PYTH(PublicKey.unique()),
+        (mint) => {
+          supplyToken = mint;
+          return supplyReserveAccount(mint);
+        },
+      );
+
+      await expect(client.priceJupiterBorrowPositionsIxs()).rejects.toThrow(
+        message(supplyReserve, supplyToken),
+      );
+    },
+  );
+
+  it("still refuses Jupiter Earn pricing without a Lending account", async () => {
+    const { client } = jupiterEarnFixture(PYTH_ROLES, PYTH(PublicKey.unique()));
+    (client.base.connection.getProgramAccounts as jest.Mock).mockResolvedValue(
+      [],
+    );
+
+    await expect(client.priceJupiterEarnPositionsIxs()).rejects.toThrow(
+      "Expected one Jupiter Lending account for fToken mint",
+    );
   });
 
   it("wires Jupiter pricing only for enabled ext_jupiter protocol bits", async () => {

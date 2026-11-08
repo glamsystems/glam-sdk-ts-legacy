@@ -22,6 +22,7 @@ import {
 } from "./base";
 import { MarginfiPolicy } from "../deser/integrationPolicies";
 import {
+  decodeMarginfiAccountGroup,
   decodeMarginfiBalances,
   decodeMarginfiBank,
 } from "../deser/marginfiLayouts";
@@ -103,11 +104,13 @@ function pulseMarginfiBankPriceCacheIx(accounts: {
 
 function pulseMarginfiAccountHealthIx(accounts: {
   marginfiAccount: PublicKey;
+  group: PublicKey;
   remainingAccounts: AccountMeta[];
 }): TransactionInstruction {
   return new TransactionInstruction({
     keys: [
       { pubkey: accounts.marginfiAccount, isSigner: false, isWritable: true },
+      { pubkey: accounts.group, isSigner: false, isWritable: false },
       ...accounts.remainingAccounts,
     ],
     programId: MARGINFI_PROGRAM_ID,
@@ -531,6 +534,13 @@ export class MarginfiClient implements ProtocolPolicyClient<MarginfiPolicy> {
     marginfiAccount: PublicKey | string,
     targetBank?: PublicKey | string,
   ): Promise<MarginfiBank[]> {
+    return (await this.readHealth(marginfiAccount, targetBank)).banks;
+  }
+
+  private async readHealth(
+    marginfiAccount: PublicKey | string,
+    targetBank?: PublicKey | string,
+  ): Promise<{ group: PublicKey; banks: MarginfiBank[] }> {
     const account = await this.base.connection.getAccountInfo(
       new PublicKey(marginfiAccount),
     );
@@ -557,9 +567,12 @@ export class MarginfiClient implements ProtocolPolicyClient<MarginfiPolicy> {
       )
       .sort((a, b) => Buffer.compare(b.toBuffer(), a.toBuffer()));
 
-    return await Promise.all(
-      healthBanks.map((activeBank) => this.fetchBank(activeBank)),
-    );
+    return {
+      group: decodeMarginfiAccountGroup(account.data),
+      banks: await Promise.all(
+        healthBanks.map((activeBank) => this.fetchBank(activeBank)),
+      ),
+    };
   }
 
   buildHealthRemainingAccounts(banks: MarginfiBank[]): AccountMeta[] {
@@ -577,11 +590,19 @@ export class MarginfiClient implements ProtocolPolicyClient<MarginfiPolicy> {
     marginfiAccount: PublicKey | string,
   ): Promise<{ ixs: TransactionInstruction[]; banks: MarginfiBank[] }> {
     const account = new PublicKey(marginfiAccount);
-    const banks = await this.getHealthBanks(account);
+    const { group, banks } = await this.readHealth(account);
+    for (const bank of banks) {
+      if (!bank.group.equals(group)) {
+        throw new Error(
+          `Marginfi bank ${bank.address} belongs to group ${bank.group}, but account ${account} belongs to group ${group}. No health pulse was built.`,
+        );
+      }
+    }
     const ixs = [
       ...(await this.getBankRefreshInstructions(banks)),
       pulseMarginfiAccountHealthIx({
         marginfiAccount: account,
+        group,
         remainingAccounts: this.buildHealthRemainingAccounts(banks),
       }),
     ];

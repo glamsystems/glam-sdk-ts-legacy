@@ -23,6 +23,7 @@ import {
 import { PkMap } from "./pkmap";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 import { getTokenAclMintConfigPda } from "./glamPDAs";
+import { getMultipleAccountsInfoBatched } from "./multipleAccounts";
 import { getProgramAccounts } from "./rpc";
 
 export type StakeAccountInfo = {
@@ -258,7 +259,7 @@ export async function fetchMintsAndTokenPrograms(
   mintPubkeys: PublicKey[],
 ): Promise<{ mint: Mint; tokenProgram: PublicKey }[]> {
   const accountsInfo = (
-    await connection.getMultipleAccountsInfo(mintPubkeys, "confirmed")
+    await getMultipleAccountsInfoBatched(connection, mintPubkeys, "confirmed")
   ).filter((info): info is AccountInfo<Buffer> => info !== null);
   if (accountsInfo.length !== mintPubkeys.length) {
     throw new Error(

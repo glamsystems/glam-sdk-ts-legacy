@@ -4,6 +4,8 @@
     ".github/SDK_RELEASES.md",
     ".github/workflows/build.yml",
     ".github/workflows/publish.yml",
+    ".node-version",
+    "scripts/check-bundle.mjs",
     "scripts/release-sdk.mjs",
     "scripts/tests/release-sdk.test.mjs"
   ]

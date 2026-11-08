@@ -10,6 +10,7 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { fetchAddressLookupTableAccounts } from "../utils/lookupTables";
+import { getMultipleAccountsInfoBatched } from "../utils/multipleAccounts";
 import { BN } from "@coral-xyz/anchor";
 import { KaminoLendingClient, KaminoVaultsClient } from "./kamino";
 import {
@@ -27,6 +28,7 @@ import {
 } from "./phoenix";
 
 import { BaseClient } from "./base";
+import { ClusterNetwork } from "../clientConfig";
 
 import { StateAccountType, StateModel } from "../models";
 import {
@@ -100,8 +102,8 @@ import {
   buildUpdateExchangePricesIx,
   buildUpdateRateIx,
   fetchLendingByFTokenMint,
-  fetchLendingReserveAndVault,
   fetchPositionInfo,
+  fetchTokenReserveAndVault,
   fetchVaultConfigInfo,
   getTickPda,
   getVaultConfigPda,
@@ -358,6 +360,15 @@ type PricingChunk = {
   ixs: TransactionInstruction[];
   kaminoReserves: PublicKey[];
 };
+
+// Only the staging program set on the mainnet cluster has an ext_phoenix that
+// predates sync then price. The rule trusts the client's cluster and reads no
+// account.
+function phoenixPredatesSyncThenPrice(
+  base: Pick<BaseClient, "staging" | "cluster">,
+): boolean {
+  return base.staging && base.cluster === ClusterNetwork.Mainnet;
+}
 
 export class PriceClient {
   private _stateModel: StateModel | null = null;
@@ -1173,8 +1184,10 @@ export class PriceClient {
       this.base.getVaultAta(mint),
     );
 
-    const possibleShareAtaAccountsInfo =
-      await this.base.connection.getMultipleAccountsInfo(possibleShareAtas);
+    const possibleShareAtaAccountsInfo = await getMultipleAccountsInfoBatched(
+      this.base.connection,
+      possibleShareAtas,
+    );
     const shareAtas: typeof possibleShareAtas = [];
     const shareMints: typeof allKvaultMints = [];
     const kvaultStates: typeof allKvaultStates = [];
@@ -1309,8 +1322,10 @@ export class PriceClient {
       return { ixs: [], kaminoReserves: [] };
     }
 
-    const accountsInfo =
-      await this.base.connection.getMultipleAccountsInfo(jupiterEarnAtas);
+    const accountsInfo = await getMultipleAccountsInfoBatched(
+      this.base.connection,
+      jupiterEarnAtas,
+    );
     const remainingAccounts: AccountMeta[] = [];
     const ixs: TransactionInstruction[] = [];
     const updatedLendings = new PkSet();
@@ -1390,11 +1405,11 @@ export class PriceClient {
         borrowAssetMeta,
       ] = await Promise.all([
         this.resolvePositionTokenAccount(position.positionMint),
-        fetchLendingReserveAndVault(
+        fetchTokenReserveAndVault(
           this.base.connection,
           vaultConfigInfo.supplyToken,
         ),
-        fetchLendingReserveAndVault(
+        fetchTokenReserveAndVault(
           this.base.connection,
           vaultConfigInfo.borrowToken,
         ),
@@ -1577,7 +1592,9 @@ export class PriceClient {
    * directly precedes it and reads the syncs through the instructions sysvar
    * at remaining index 2. Each sync names the complete arena groups the
    * global config's headers state. If there are no registered Phoenix trader
-   * accounts, returns null.
+   * accounts, returns null. At the staging program set on the mainnet
+   * cluster, whose ext_phoenix predates sync then price, it throws before
+   * composing anything for a tracked trader.
    */
   public async pricePhoenixTradersIxs(
     stateModel: StateModel | null = this.cachedStateModel,
@@ -1588,6 +1605,11 @@ export class PriceClient {
     );
     if (traderAccounts.length === 0) {
       return null;
+    }
+    if (phoenixPredatesSyncThenPrice(this.base)) {
+      throw new Error(
+        "The staging ext_phoenix deployment on the mainnet cluster lacks the safeguard requiring traders to be synced in the same transaction before pricing. No pricing instruction was composed, and a vault that tracks a Phoenix trader cannot be priced at this deployment. Phoenix traders are priced once ext_phoenix is redeployed and a release of this SDK composes against that deployment.",
+      );
     }
 
     const [oracleAccounts, exchange] = await Promise.all([
@@ -2020,8 +2042,10 @@ export class PriceClient {
       return null;
     }
 
-    const accountInfos =
-      await this.base.connection.getMultipleAccountsInfo(externalPositions);
+    const accountInfos = await getMultipleAccountsInfoBatched(
+      this.base.connection,
+      externalPositions,
+    );
     const marginfiAccounts = externalPositions.filter((_, index) =>
       accountInfos[index]?.owner.equals(MARGINFI_PROGRAM_ID),
     );
@@ -2374,7 +2398,7 @@ export class PriceClient {
    * glam_protocol's validate_oracle accepts, before it reads GlobalConfig at all,
    * a stake pool account owned by one of the stake pool programs whose pool_mint
    * is the mint, or a Marinade state whose msol_mint is the mint. The same
-   * predicate is checked here over one batch of [pool state, mint] reads, so a
+   * predicate is checked here over the [pool state, mint] reads, so a
    * liquid staking token the vault holds is priced without a registration.
    */
   private async lstPoolStateOracles(
@@ -2396,7 +2420,8 @@ export class PriceClient {
       return oracles;
     }
 
-    const accountsInfo = await this.base.connection.getMultipleAccountsInfo(
+    const accountsInfo = await getMultipleAccountsInfoBatched(
+      this.base.connection,
       candidates.flatMap(({ mint, poolState }) => [poolState, mint]),
     );
 

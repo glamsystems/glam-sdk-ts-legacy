@@ -43,6 +43,7 @@ import {
   getTokenAccountsByOwner,
   parseMintAccountInfo,
 } from "../utils/accounts";
+import { getMultipleAccountsInfoBatched } from "../utils/multipleAccounts";
 import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -1123,7 +1124,8 @@ export class BaseClient {
           // Local validators may clone a newer global config than the set of
           // mint accounts they have available. Resolve what we can and let
           // downstream callers request only the assets they actually use.
-          const accountsInfo = await this.connection.getMultipleAccountsInfo(
+          const accountsInfo = await getMultipleAccountsInfoBatched(
+            this.connection,
             assets,
             "confirmed",
           );

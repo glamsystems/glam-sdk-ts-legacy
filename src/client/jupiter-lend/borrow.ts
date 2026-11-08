@@ -60,11 +60,11 @@ import {
   VAULT_STATE_VAULT_ID_OFFSET,
   buildBorrowOperateRemainingAccounts,
   decodePositionInfo,
-  fetchLendingReserveAndVault,
   fetchLiquidityPosition,
   fetchPositionInfo,
   fetchTickByValue,
   fetchTickIdLiquidationByTick,
+  fetchTokenReserveAndVault,
   fetchVaultConfigInfo,
   fetchVaultMetadataLookupTable,
   fetchVaultStateInfo,
@@ -718,11 +718,11 @@ export class JupiterBorrowClient
     const {
       reserve: supplyTokenReservesLiquidity,
       vault: vaultSupplyTokenAccount,
-    } = await fetchLendingReserveAndVault(connection, supplyToken);
+    } = await fetchTokenReserveAndVault(connection, supplyToken);
     const {
       reserve: borrowTokenReservesLiquidity,
       vault: vaultBorrowTokenAccount,
-    } = await fetchLendingReserveAndVault(connection, borrowToken);
+    } = await fetchTokenReserveAndVault(connection, borrowToken);
 
     const currentTickValue = positionInfo.isSupplyOnlyPosition
       ? MIN_TICK

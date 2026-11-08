@@ -365,6 +365,13 @@ export function getRateModelPda(mint: PublicKey): PublicKey {
   )[0];
 }
 
+export function getTokenReservePda(mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("reserve"), mint.toBuffer()],
+    JUPITER_LIQUIDITY_PROGRAM_ID,
+  )[0];
+}
+
 export function getLiquidityPda(): PublicKey {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("liquidity")],
@@ -674,6 +681,17 @@ export async function fetchLendingReserveAndVault(
       LENDING_TOKEN_RESERVES_LIQUIDITY_OFFSET + PUBKEY_BYTES,
     ),
   );
+  const vault = await fetchReserveVault(connection, reserve, mint);
+  return { reserve, vault };
+}
+
+// Reads the mint's liquidity TokenReserve at its derived address, so a mint
+// without an Earn market resolves too.
+export async function fetchTokenReserveAndVault(
+  connection: Connection,
+  mint: PublicKey,
+): Promise<{ reserve: PublicKey; vault: PublicKey }> {
+  const reserve = getTokenReservePda(mint);
   const vault = await fetchReserveVault(connection, reserve, mint);
   return { reserve, vault };
 }

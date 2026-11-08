@@ -19,6 +19,7 @@ import {
 import { PHOENIX_PROTOCOL } from "../../src/protocols";
 import { StateAccountType } from "../../src/models";
 import { PkMap } from "../../src/utils";
+import { ClusterNetwork } from "../../src/clientConfig";
 
 const STATE = PublicKey.unique();
 const VAULT = PublicKey.unique();
@@ -245,6 +246,131 @@ function oracleMap(entries: Array<[PublicKey, OracleSpec]>) {
   return new Map(entries.map(([mint, spec]) => [mint.toBase58(), spec]));
 }
 
+/** Sets the program set and cluster the client reaches. */
+function atDeployment(
+  client: PriceClient,
+  staging: boolean,
+  cluster: ClusterNetwork,
+) {
+  Object.assign(client.base, { staging, cluster });
+  return client;
+}
+
+const PHOENIX_STAGING_REFUSAL =
+  "The staging ext_phoenix deployment on the mainnet cluster lacks the safeguard requiring traders to be synced in the same transaction before pricing. No pricing instruction was composed, and a vault that tracks a Phoenix trader cannot be priced at this deployment. Phoenix traders are priced once ext_phoenix is redeployed and a release of this SDK composes against that deployment.";
+
+/**
+ * The heap frame, one sync per trader in order, then the pricer, whose
+ * remaining accounts begin at the global config with the sysvar at index 2.
+ */
+function expectSyncThenPrice(
+  ixs: TransactionInstruction[],
+  traders: PublicKey[],
+) {
+  expect(ixs).toHaveLength(traders.length + 2);
+  expect(ixs[0].programId.equals(ComputeBudgetProgram.programId)).toBe(true);
+  const pricing = ixs[ixs.length - 1];
+  expect(pricing.programId.equals(EXT_PHOENIX)).toBe(true);
+  traders.forEach((trader, i) => {
+    const sync = ixs[1 + i];
+    expect(sync.programId.equals(PHOENIX_PROGRAM_ID)).toBe(true);
+    expect([...sync.data]).toEqual([249, 139, 82, 44, 126, 66, 133, 220]);
+    expect(
+      sync.keys.map(({ pubkey, isSigner, isWritable }) => [
+        pubkey.toBase58(),
+        isSigner,
+        isWritable,
+      ]),
+    ).toEqual([
+      [PHOENIX_PROGRAM_ID.toBase58(), false, false],
+      [PHOENIX_LOG_AUTHORITY.toBase58(), false, false],
+      [PHOENIX_GLOBAL_CONFIG.toBase58(), false, false],
+      [trader.toBase58(), false, true],
+      [PHOENIX_PERP_ASSET_MAP.toBase58(), false, false],
+      [PHOENIX_GLOBAL_TRADER_INDEX.toBase58(), false, true],
+      [PHOENIX_ACTIVE_TRADER_BUFFER.toBase58(), false, true],
+    ]);
+  });
+  const keys = pricing.keys.map(({ pubkey }) => pubkey.toBase58());
+  const remaining = keys.slice(keys.indexOf(PHOENIX_GLOBAL_CONFIG.toBase58()));
+  expect(remaining).toEqual(
+    [
+      PHOENIX_GLOBAL_CONFIG,
+      PHOENIX_PERP_ASSET_MAP,
+      SYSVAR_INSTRUCTIONS_PUBKEY,
+      ...traders,
+      PYTH_ORACLE,
+    ].map((pubkey) => pubkey.toBase58()),
+  );
+}
+
+const PYTH_ORACLES = () =>
+  oracleMap([
+    [USDC, PYTH],
+    [BASE_MINT, PYTH],
+    [WSOL, PYTH],
+  ]);
+
+describe("Phoenix trader pricing at the ext_phoenix deployment the client reaches", () => {
+  it("refuses at the staging program set on the mainnet cluster and reads no Phoenix exchange account", async () => {
+    const { client } = makeClient(PYTH_ORACLES(), BASE_MINT);
+    atDeployment(client, true, ClusterNetwork.Mainnet);
+
+    await expect(client.pricePhoenixTradersIxs()).rejects.toThrow(
+      new Error(PHOENIX_STAGING_REFUSAL),
+    );
+    expect(client.base.connection.getAccountInfo).not.toHaveBeenCalledWith(
+      PHOENIX_GLOBAL_CONFIG,
+    );
+  });
+
+  it("rejects the whole vault pricing at the staging program set on the mainnet cluster", async () => {
+    const { client } = makeClient(PYTH_ORACLES(), BASE_MINT);
+    atDeployment(client, true, ClusterNetwork.Mainnet);
+    jest
+      .spyOn(client, "priceVaultTokensIx")
+      .mockResolvedValue({ ixs: [], kaminoReserves: [] });
+
+    await expect(client.priceVaultIxs()).rejects.toThrow(
+      new Error(PHOENIX_STAGING_REFUSAL),
+    );
+  });
+
+  it("returns null at the staging program set on the mainnet cluster when the vault tracks no trader", async () => {
+    const { client } = makeClient(PYTH_ORACLES(), BASE_MINT, []);
+    atDeployment(client, true, ClusterNetwork.Mainnet);
+
+    await expect(client.pricePhoenixTradersIxs()).resolves.toBeNull();
+  });
+
+  it.each([
+    [
+      "the staging program set on a local validator",
+      true,
+      ClusterNetwork.Localnet,
+    ],
+    [
+      "the staging program set on a custom cluster",
+      true,
+      ClusterNetwork.Custom,
+    ],
+    ["the staging program set on devnet", true, ClusterNetwork.Devnet],
+    [
+      "the non-staging program set on the mainnet cluster",
+      false,
+      ClusterNetwork.Mainnet,
+    ],
+  ] as const)("composes sync then price at %s", async (_, staging, cluster) => {
+    const traders = [PHOENIX_TRADER, SECOND_PHOENIX_TRADER];
+    const { client } = makeClient(PYTH_ORACLES(), BASE_MINT, traders);
+    atDeployment(client, staging, cluster);
+
+    const { ixs } = (await client.pricePhoenixTradersIxs())!;
+
+    expectSyncThenPrice(ixs, traders);
+  });
+});
+
 describe("Phoenix trader pricing Kamino reserve reporting", () => {
   it("reports the USDC quote oracle's reserve when the base asset is not USDC", async () => {
     const { client } = makeClient(
@@ -281,45 +407,7 @@ describe("Phoenix trader pricing Kamino reserve reporting", () => {
 
     const { ixs } = (await client.pricePhoenixTradersIxs())!;
 
-    expect(ixs).toHaveLength(4);
-    expect(ixs[0].programId.equals(ComputeBudgetProgram.programId)).toBe(true);
-    const pricing = ixs[3];
-    expect(pricing.programId.equals(EXT_PHOENIX)).toBe(true);
-    [PHOENIX_TRADER, SECOND_PHOENIX_TRADER].forEach((trader, i) => {
-      const sync = ixs[1 + i];
-      expect(sync.programId.equals(PHOENIX_PROGRAM_ID)).toBe(true);
-      expect([...sync.data]).toEqual([249, 139, 82, 44, 126, 66, 133, 220]);
-      expect(
-        sync.keys.map(({ pubkey, isSigner, isWritable }) => [
-          pubkey.toBase58(),
-          isSigner,
-          isWritable,
-        ]),
-      ).toEqual([
-        [PHOENIX_PROGRAM_ID.toBase58(), false, false],
-        [PHOENIX_LOG_AUTHORITY.toBase58(), false, false],
-        [PHOENIX_GLOBAL_CONFIG.toBase58(), false, false],
-        [trader.toBase58(), false, true],
-        [PHOENIX_PERP_ASSET_MAP.toBase58(), false, false],
-        [PHOENIX_GLOBAL_TRADER_INDEX.toBase58(), false, true],
-        [PHOENIX_ACTIVE_TRADER_BUFFER.toBase58(), false, true],
-      ]);
-    });
-    // The remaining accounts begin at the Phoenix global config.
-    const keys = pricing.keys.map(({ pubkey }) => pubkey.toBase58());
-    const remaining = keys.slice(
-      keys.indexOf(PHOENIX_GLOBAL_CONFIG.toBase58()),
-    );
-    expect(remaining).toEqual(
-      [
-        PHOENIX_GLOBAL_CONFIG,
-        PHOENIX_PERP_ASSET_MAP,
-        SYSVAR_INSTRUCTIONS_PUBKEY,
-        PHOENIX_TRADER,
-        SECOND_PHOENIX_TRADER,
-        PYTH_ORACLE,
-      ].map((pubkey) => pubkey.toBase58()),
-    );
+    expectSyncThenPrice(ixs, [PHOENIX_TRADER, SECOND_PHOENIX_TRADER]);
   });
 
   it.each([

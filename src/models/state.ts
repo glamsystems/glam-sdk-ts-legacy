@@ -71,17 +71,18 @@ export class StateIdlModel implements StateModelType {
  * Enriched state model built from multiple onchain accounts
  */
 export class StateModel extends StateIdlModel {
-  // Override nullable fields from StateIdlModel with non-nullable
-  accountType!: StateAccountType;
-  name!: number[];
-  enabled!: boolean;
-  assets!: PublicKey[];
-  created!: CreatedModel;
-  owner!: PublicKey;
-  portfolioManagerName!: number[];
-  timelockDuration!: number;
-  integrationAcls!: IntegrationAcl[];
-  delegateAcls!: DelegateAcl[];
+  // Type-only narrowing. Under define semantics a field declared here resets
+  // what the parent constructor assigned.
+  declare accountType: StateAccountType;
+  declare name: number[];
+  declare enabled: boolean;
+  declare assets: PublicKey[];
+  declare created: CreatedModel;
+  declare owner: PublicKey;
+  declare portfolioManagerName: number[];
+  declare timelockDuration: number;
+  declare integrationAcls: IntegrationAcl[];
+  declare delegateAcls: DelegateAcl[];
 
   // Fields not available on StateIdlModel but can be derived from state account
   id!: PublicKey;
