@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "package": "@glamsystems/glam-sdk",
+  "version": "1.2.1",
+  "source": {
+    "repository": "glamsystems/glam",
+    "commit": "2ea21cfbc37ddb1a4e808961a87776561b83bcb8"
+  },
+  "notes": "### Bug Fixes\n\n* **sdk,cli,release:** restore vault pricing in the published SDK and check the packed bundle before it ships ([#1745](https://github.com/glamsystems/glam/issues/1745)) ([5fe14cb](https://github.com/glamsystems/glam/commit/5fe14cb75009b49a36c5d6b483f632c69bd84097))"
+}
