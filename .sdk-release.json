@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "package": "@glamsystems/glam-sdk",
+  "version": "1.2.2",
+  "source": {
+    "repository": "glamsystems/glam",
+    "commit": "4bdf4e1c2197c88ff0fb6800bf8b33a44a0af054"
+  },
+  "notes": "### Bug Fixes\n\n* **runtime:** apply November Node security releases ([#1763](https://github.com/glamsystems/glam/issues/1763)) ([93832b0](https://github.com/glamsystems/glam/commit/93832b0828c0144984357520eaca98af1d00ea4f))"
+}
