@@ -1200,6 +1200,209 @@ export type ExtOrca = {
       ]
     },
     {
+      "name": "priceOrcaWhirlpoolPositions",
+      "docs": [
+        "Prices the vault's Orca Whirlpools positions and records the amount on the GLAM state.",
+        "",
+        "Remaining accounts for each position:",
+        "- position",
+        "- position_token_account",
+        "- whirlpool",
+        "- tick_array_lower",
+        "- tick_array_upper",
+        "- token_mint_a",
+        "- token_oracle_a",
+        "- token_mint_b",
+        "- token_oracle_b",
+        "- optional reward_mint, reward_oracle pairs for initialized rewards with nonzero value"
+      ],
+      "discriminator": [
+        3,
+        81,
+        117,
+        34,
+        5,
+        238,
+        158,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                55,
+                49,
+                193,
+                142,
+                247,
+                75,
+                193,
+                33,
+                61,
+                5,
+                218,
+                254,
+                219,
+                143,
+                206,
+                156,
+                138,
+                14,
+                32,
+                89,
+                232,
+                248,
+                173,
+                46,
+                77,
+                46,
+                206,
+                189,
+                171,
+                68,
+                237
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "gstgptmbgJVi5f8ZmSRVZjZkDQwqKa3xWuUtD5WmJHz"
+        }
+      ],
+      "args": [
+        {
+          "name": "numPositions",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "repositionLiquidityV2",
       "docs": [
         "Reposition liquidity into a new Orca Whirlpools tick range."
@@ -1538,21 +1741,6 @@ export type ExtOrca = {
         }
       ],
       "args": []
-    }
-  ],
-  "accounts": [
-    {
-      "name": "stateAccount",
-      "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
-      ]
     }
   ],
   "errors": [

@@ -8,16 +8,14 @@ import { getGlobalConfigPda, getIntegrationAuthorityPda } from "./glamPDAs";
 
 /**
  * The pricing instructions the integration programs host
- * (anchor_v1/PRICING.md). The `anchor/` build no longer carries them, so the
- * SDK encodes each one from three facts of the program source: the
- * discriminator Anchor derives from the instruction's name, the accounts its
- * `#[derive(Accounts)]` struct declares in that order, and the remaining
- * accounts, which are those of the glam_mint pricer of the same name.
- * `tests/sdk/ext_pricing.test.ts` holds this file to the anchor_v1 source.
+ * (anchor_v1/PRICING.md). The SDK encodes each one from two facts of the
+ * program source: the discriminator Anchor derives from the instruction's
+ * name and the accounts its `#[derive(Accounts)]` struct declares, in that
+ * order. `tests/sdk/ext_pricing.test.ts` holds this file to both. The
+ * remaining accounts a handler reads are appended as the caller gives them.
  */
 
-// sha256("global:<name>")[..8]. A pricer keeps the name of the mint pricer it
-// replaces, so these are the bytes the tracked glam_mint document carries.
+// sha256("global:<name>")[..8].
 export const EXT_PRICER_DISCRIMINATORS = Object.freeze({
   price_registered_positions: [90, 157, 162, 50, 236, 16, 188, 3],
   price_loopscale_loans: [106, 180, 138, 193, 90, 3, 24, 42],

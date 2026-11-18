@@ -91,9 +91,9 @@ export const BRIDGE_ROUTES_HEAP_FRAME_BYTES = 256 * 1024;
 /**
  * The heap frame every owner-side route instruction's transaction starts with. The compute
  * unit limit is the base client's: it simulates the transaction and sets the limit from the
- * units it used, with its margin (a tightening beside two sets at the caps measured 208k units
- * on anchor_v1 and 238k on anchor). A limit instruction built here would be a second one in a
- * version 0 transaction, which the runtime refuses as a duplicate.
+ * units it used, with its margin (a tightening beside two sets at the caps measured 208k
+ * units). A limit instruction built here would be a second one in a version 0 transaction,
+ * which the runtime refuses as a duplicate.
  */
 function heapFrameIx(): TransactionInstruction {
   return ComputeBudgetProgram.requestHeapFrame({

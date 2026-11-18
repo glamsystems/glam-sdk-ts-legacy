@@ -75,8 +75,39 @@ export type PhoenixOrderFlags = PhoenixIdlTypes["orderFlags"];
 export type PhoenixOrderIds = PhoenixIdlTypes["orderIds"];
 export type PhoenixOrderPacket = PhoenixIdlTypes["orderPacket"];
 export type PhoenixQuoteLots = PhoenixIdlTypes["quoteLots"];
-export type PhoenixRegisterTraderParams =
-  PhoenixIdlTypes["registerTraderParams"];
+// The program takes `maxPositions` as a u32 and requires `traderPreferenceBits` to be 0.
+// `maxPositions` was a BN while the IDL declared a u64, and callers built against that form
+// pass no bits. Both forms are accepted and encode the same ten bytes.
+export type PhoenixRegisterTraderParams = Omit<
+  PhoenixIdlTypes["registerTraderParams"],
+  "maxPositions" | "traderPreferenceBits"
+> & {
+  maxPositions: number | BN;
+  traderPreferenceBits?: number;
+};
+
+function phoenixRegisterTraderArgs(
+  params: PhoenixRegisterTraderParams,
+): PhoenixIdlTypes["registerTraderParams"] {
+  const maxPositions = BN.isBN(params.maxPositions)
+    ? params.maxPositions.toNumber()
+    : params.maxPositions;
+  // The u32 encoder truncates a fraction without a word.
+  if (
+    !Number.isInteger(maxPositions) ||
+    maxPositions < 0 ||
+    maxPositions > 0xffff_ffff
+  ) {
+    throw new Error(
+      `maxPositions must be an integer from 0 to 4294967295, got ${params.maxPositions}`,
+    );
+  }
+  return {
+    ...params,
+    maxPositions,
+    traderPreferenceBits: params.traderPreferenceBits ?? 0,
+  };
+}
 export type PhoenixSelfTradeBehavior = PhoenixIdlTypes["selfTradeBehavior"];
 export type PhoenixSide = PhoenixIdlTypes["side"];
 export type PhoenixTicks = PhoenixIdlTypes["ticks"];
@@ -832,7 +863,7 @@ class TxBuilder
     signer?: PublicKey,
   ): Promise<TransactionInstruction> {
     return await this.client.base.extPhoenixProgram.methods
-      .registerTrader(params)
+      .registerTrader(phoenixRegisterTraderArgs(params))
       .accountsPartial(
         await this.getRegisterTraderAccounts(params, accounts, signer),
       )

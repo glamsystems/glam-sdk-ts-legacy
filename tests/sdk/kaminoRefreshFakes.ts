@@ -110,10 +110,10 @@ export function offlineAnchorProvider(): AnchorProvider {
 /**
  * The real Anchor programs, so an instruction a suite measures carries the
  * discriminator, the argument encoding and the account list the SDK sends.
- * The staging flavour is used because the mainnet glam_mint does not yet carry
- * the Loopscale, Phoenix, stake, bridge and Neutral pricing instructions; the
- * accounts and arguments are the same either way, and the program id a
- * transaction names is one key whichever flavour it comes from.
+ * The staging flavour is used because the mainnet glam_mint does not carry the
+ * stake pricing instruction; the accounts and arguments are the same either
+ * way, and the program id a transaction names is one key whichever flavour it
+ * comes from.
  */
 export function realPrograms(
   provider: AnchorProvider = offlineAnchorProvider(),

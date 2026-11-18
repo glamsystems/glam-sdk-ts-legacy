@@ -113,6 +113,213 @@ export type ExtPhoenix = {
       "args": []
     },
     {
+      "name": "cancelAllPlusConditional",
+      "docs": [
+        "Cancels every resting order and every conditional order of the trader on the market."
+      ],
+      "discriminator": [
+        142,
+        173,
+        238,
+        126,
+        79,
+        19,
+        53,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancelConditionalOrder",
+      "docs": [
+        "Cancels one or both legs of a conditional order by its index in the trader's collection."
+      ],
+      "discriminator": [
+        82,
+        104,
+        25,
+        51,
+        248,
+        54,
+        66,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "cancelConditionalOrderInstruction"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "cancelOrdersById",
       "docs": [
         "Cancels specific resting orders by their order IDs."
@@ -570,6 +777,239 @@ export type ExtPhoenix = {
       ]
     },
     {
+      "name": "depositNativeSol",
+      "docs": [
+        "Deposits `lamports` of the vault's SOL into a trader as native SOL collateral: capacity",
+        "for the entry (rent from the signer), the transfer from the vault, then the sync that",
+        "accounts it; the deposit must be accounted in full."
+      ],
+      "discriminator": [
+        16,
+        147,
+        179,
+        138,
+        225,
+        77,
+        137,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "logAuthority"
+        },
+        {
+          "name": "globalConfig",
+          "writable": true
+        },
+        {
+          "name": "traderAccount",
+          "writable": true
+        },
+        {
+          "name": "globalTraderIndex",
+          "writable": true
+        },
+        {
+          "name": "activeTraderBuffer",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "placeAttachedConditionalOrder",
+      "docs": [
+        "Attaches one or two trigger legs to a resting limit order on the orderbook's market."
+      ],
+      "discriminator": [
+        43,
+        117,
+        136,
+        128,
+        72,
+        150,
+        101,
+        122
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "placeAttachedConditionalOrderInstruction"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "placeLimitOrder",
       "docs": [
         "Places a limit order; the unfilled portion rests on the orderbook."
@@ -672,6 +1112,114 @@ export type ExtPhoenix = {
           "type": {
             "defined": {
               "name": "orderPacket"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "placeLimitOrderWithConditionals",
+      "docs": [
+        "Places a limit order and attaches one or two trigger legs to it in one CPI."
+      ],
+      "discriminator": [
+        95,
+        45,
+        68,
+        168,
+        232,
+        218,
+        210,
+        92
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "placeLimitOrderWithConditionalsInstruction"
             }
           }
         }
@@ -892,6 +1440,410 @@ export type ExtPhoenix = {
           }
         }
       ]
+    },
+    {
+      "name": "placeMultiLimitOrderV2",
+      "docs": [
+        "Places multiple post-only limit orders in one CPI, each with its own slide and",
+        "reduce-only flags, optionally as a scale-order set."
+      ],
+      "discriminator": [
+        64,
+        111,
+        40,
+        210,
+        2,
+        177,
+        38,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "packet",
+          "type": {
+            "defined": {
+              "name": "multipleOrderPacketV2"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "placePositionConditionalOrder",
+      "docs": [
+        "Places a position conditional order: one or two trigger legs on the orderbook's market,",
+        "each within the policy's trigger band, sized in base lots or as a percent of the position."
+      ],
+      "discriminator": [
+        65,
+        108,
+        83,
+        129,
+        76,
+        193,
+        92,
+        143
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "placePositionConditionalOrderInstruction"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "pricePhoenixTraders",
+      "docs": [
+        "Prices the vault's Phoenix trader accounts and records the amount on the GLAM state."
+      ],
+      "discriminator": [
+        112,
+        90,
+        177,
+        46,
+        145,
+        191,
+        219,
+        213
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                227,
+                199,
+                235,
+                230,
+                176,
+                132,
+                243,
+                117,
+                43,
+                131,
+                173,
+                18,
+                78,
+                255,
+                26,
+                50,
+                209,
+                135,
+                86,
+                219,
+                140,
+                126,
+                61,
+                255,
+                0,
+                218,
+                252,
+                224,
+                172,
+                8,
+                223,
+                207
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        }
+      ],
+      "args": []
     },
     {
       "name": "registerTrader",
@@ -1356,16 +2308,214 @@ export type ExtPhoenix = {
           "address": "11111111111111111111111111111111"
         }
       ],
+      "args": []
+    },
+    {
+      "name": "transferNativeSol",
+      "docs": [
+        "Transfers native SOL collateral between two of the vault's traders."
+      ],
+      "discriminator": [
+        204,
+        65,
+        217,
+        206,
+        56,
+        180,
+        74,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
       "args": [
         {
           "name": "params",
           "type": {
             "defined": {
-              "name": "transferCollateralChildToParentInstruction"
+              "name": "transferNativeSolInstruction"
             }
           }
         }
       ]
+    },
+    {
+      "name": "transferNativeSolFromChildToParent",
+      "docs": [
+        "Sweeps a flat child trader's native SOL collateral to its parent."
+      ],
+      "discriminator": [
+        90,
+        175,
+        49,
+        106,
+        54,
+        115,
+        8,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "updateTraderState",
@@ -1706,20 +2856,113 @@ export type ExtPhoenix = {
           }
         }
       ]
-    }
-  ],
-  "accounts": [
+    },
     {
-      "name": "stateAccount",
+      "name": "withdrawNativeSol",
+      "docs": [
+        "Withdraws native SOL collateral, or uncounted excess lamports, from a trader to the vault."
+      ],
       "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
+        201,
+        104,
+        187,
+        105,
+        80,
+        204,
+        84,
+        138
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "glamProtocolProgram"
+            }
+          }
+        },
+        {
+          "name": "glamSigner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "cpiProgram",
+          "address": "EtrnLzgbS7nMMy5fbD42kXiUzGg8XQzJ972Xtk1cjWih"
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "action",
+          "type": {
+            "defined": {
+              "name": "withdrawNativeSolAction"
+            }
+          }
+        }
       ]
     }
   ],
@@ -1873,6 +3116,31 @@ export type ExtPhoenix = {
       "code": 6029,
       "name": "orderTypeNotAllowed",
       "msg": "Phoenix order type is not allowed by policy"
+    },
+    {
+      "code": 6030,
+      "name": "traderPreferenceBitsNotAdmitted",
+      "msg": "Trader preference bits are not admitted by this program, and no trader was registered. Register the trader with zero preference bits."
+    },
+    {
+      "code": 6031,
+      "name": "conditionalOrdersDisabled",
+      "msg": "Conditional orders are disabled by Phoenix policy: max_price_deviation_bps is 0"
+    },
+    {
+      "code": 6032,
+      "name": "conditionalExecutionPriceRequired",
+      "msg": "A conditional order leg needs an explicit nonzero execution price"
+    },
+    {
+      "code": 6033,
+      "name": "nativeSolDepositNotAccounted",
+      "msg": "The deposited native SOL was not accounted as collateral in full"
+    },
+    {
+      "code": 6034,
+      "name": "nativeSolNotConserved",
+      "msg": "Native SOL lamports or accounted collateral did not move as the instruction requires"
     }
   ],
   "types": [
@@ -1944,6 +3212,26 @@ export type ExtPhoenix = {
           {
             "name": "inner",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "cancelConditionalOrderInstruction",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u8"
+          },
+          {
+            "name": "disableFirst",
+            "type": "bool"
+          },
+          {
+            "name": "disableSecond",
+            "type": "bool"
           }
         ]
       }
@@ -2023,6 +3311,46 @@ export type ExtPhoenix = {
       }
     },
     {
+      "name": "condensedOrderFlags",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "flags",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "condensedOrderV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "priceInTicks",
+            "type": "u64"
+          },
+          {
+            "name": "sizeInBaseLots",
+            "type": "u64"
+          },
+          {
+            "name": "lastValidSlot",
+            "type": "u64"
+          },
+          {
+            "name": "flags",
+            "type": {
+              "defined": {
+                "name": "condensedOrderFlags"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "createdModel",
       "type": {
         "kind": "struct",
@@ -2093,6 +3421,20 @@ export type ExtPhoenix = {
           {
             "name": "amount",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "direction",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "greaterThan"
+          },
+          {
+            "name": "lessThan"
           }
         ]
       }
@@ -2613,6 +3955,49 @@ export type ExtPhoenix = {
       }
     },
     {
+      "name": "multipleOrderPacketV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bids",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "condensedOrderV2"
+                }
+              }
+            }
+          },
+          {
+            "name": "asks",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "condensedOrderV2"
+                }
+              }
+            }
+          },
+          {
+            "name": "clientOrderId",
+            "type": {
+              "option": {
+                "array": [
+                  "u8",
+                  16
+                ]
+              }
+            }
+          },
+          {
+            "name": "scaleSetId",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "nodePointer",
       "type": {
         "kind": "struct",
@@ -3091,8 +4476,10 @@ export type ExtPhoenix = {
           {
             "name": "maxPriceDeviationBps",
             "docs": [
-              "Maximum allowed deviation in basis points. Retained in policy state for",
-              "future enforcement; currently not checked by order placement."
+              "The band a conditional order's execution price may sit from its trigger",
+              "price, in basis points of the trigger, checked on the three conditional",
+              "placements; 0 disables conditional orders. Not an oracle deviation check",
+              "on resting orders."
             ],
             "type": "u16"
           },
@@ -3103,6 +4490,130 @@ export type ExtPhoenix = {
               "future enforcement; currently not checked by order placement."
             ],
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeAttachedConditionalOrderInstruction",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "orderId",
+            "type": {
+              "defined": {
+                "name": "fifoOrderId"
+              }
+            }
+          },
+          {
+            "name": "assetId",
+            "type": "u32"
+          },
+          {
+            "name": "greaterTriggerOrder",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "triggerOrderParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "lessTriggerOrder",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "triggerOrderParams"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "placeLimitOrderWithConditionalsInstruction",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "orderPacket",
+            "type": {
+              "defined": {
+                "name": "orderPacket"
+              }
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "greaterTriggerOrder",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "triggerOrderParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "lessTriggerOrder",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "triggerOrderParams"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "placePositionConditionalOrderInstruction",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "assetId",
+            "type": "u32"
+          },
+          {
+            "name": "greaterTriggerOrder",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "triggerOrderParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "lessTriggerOrder",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "triggerOrderParams"
+                }
+              }
+            }
+          },
+          {
+            "name": "sizeBaseLots",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "sizePercent",
+            "type": {
+              "option": "u8"
+            }
           }
         ]
       }
@@ -3219,7 +4730,11 @@ export type ExtPhoenix = {
         "fields": [
           {
             "name": "maxPositions",
-            "type": "u64"
+            "type": "u32"
+          },
+          {
+            "name": "traderPreferenceBits",
+            "type": "u32"
           },
           {
             "name": "traderPdaIndex",
@@ -3396,6 +4911,20 @@ export type ExtPhoenix = {
       }
     },
     {
+      "name": "stopLossOrderKind",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ioc"
+          },
+          {
+            "name": "limit"
+          }
+        ]
+      }
+    },
+    {
       "name": "ticks",
       "type": {
         "kind": "struct",
@@ -3422,7 +4951,7 @@ export type ExtPhoenix = {
       }
     },
     {
-      "name": "transferCollateralChildToParentInstruction",
+      "name": "transferCollateralInstruction",
       "type": {
         "kind": "struct",
         "fields": [
@@ -3434,12 +4963,52 @@ export type ExtPhoenix = {
       }
     },
     {
-      "name": "transferCollateralInstruction",
+      "name": "transferNativeSolInstruction",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "triggerOrderParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "triggerDirection",
+            "type": {
+              "defined": {
+                "name": "direction"
+              }
+            }
+          },
+          {
+            "name": "tradeSide",
+            "type": {
+              "defined": {
+                "name": "side"
+              }
+            }
+          },
+          {
+            "name": "orderKind",
+            "type": {
+              "defined": {
+                "name": "stopLossOrderKind"
+              }
+            }
+          },
+          {
+            "name": "triggerPrice",
+            "type": "u64"
+          },
+          {
+            "name": "executionPrice",
             "type": "u64"
           }
         ]
@@ -3467,6 +5036,35 @@ export type ExtPhoenix = {
           {
             "name": "amount",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "withdrawNativeSolAction",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "allExcess"
+          },
+          {
+            "name": "withExcess",
+            "fields": [
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "withoutExcess",
+            "fields": [
+              {
+                "name": "amount",
+                "type": "u64"
+              }
+            ]
           }
         ]
       }

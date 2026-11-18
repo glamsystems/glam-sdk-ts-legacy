@@ -188,7 +188,7 @@ export const EXPONENT_GENERIC_STANDARD_PROGRAM_ID = new PublicKey(
 
 /**
  * Phoenix OrderPacketKind discriminants.
- * Mirror `OrderPacketKind` variant order in anchor/deps/phoenix/phoenix.json.
+ * Mirror `OrderPacketKind` variant order in the Phoenix IDL store, anchor_v1/idls/external/phoenix.
  */
 export const PHOENIX_ORDER_PACKET_KIND_POST_ONLY = 0;
 export const PHOENIX_ORDER_PACKET_KIND_LIMIT = 1;
@@ -401,7 +401,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Loopscale integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_loopscale/src/state/access.rs
+  // @anchor_v1/programs/ext_loopscale/src/state/access.rs
   [getExtLoopscaleProgramId(staging).toBase58()]: {
     [protocolBitflagKey(LOOPSCALE_BORROW_PROTOCOL)]: {
       name: "LoopscaleBorrow",
@@ -444,7 +444,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Marginfi integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_marginfi/src/state/access.rs
+  // @anchor_v1/programs/ext_marginfi/src/state/access.rs
   [getExtMarginfiProgramId(staging).toBase58()]: {
     [protocolBitflagKey(MARGINFI_PROTOCOL)]: {
       name: "Marginfi",
@@ -462,7 +462,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Jupiter Lend integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_jupiter/src/state/access.rs
+  // @anchor_v1/programs/ext_jupiter/src/state/access.rs
   [getExtJupiterProgramId(staging).toBase58()]: {
     [protocolBitflagKey(JUPITER_EARN_PROTOCOL)]: {
       name: "JupiterEarn",
@@ -485,7 +485,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Orca integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_orca/src/state/access.rs
+  // @anchor_v1/programs/ext_orca/src/state/access.rs
   [getExtOrcaProgramId(staging).toBase58()]: {
     [protocolBitflagKey(ORCA_WHIRLPOOLS_PROTOCOL)]: {
       name: "OrcaWhirlpools",
@@ -505,7 +505,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Neutral integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_neutral/src/state/access.rs
+  // @anchor_v1/programs/ext_neutral/src/state/access.rs
   [getExtNeutralProgramId(staging).toBase58()]: {
     "0000000000000001": {
       name: "Neutral",
@@ -532,7 +532,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Bridge integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_bridge/src/state/access.rs
+  // @anchor_v1/programs/ext_bridge/src/state/access.rs
   [getExtBridgeProgramId(staging).toBase58()]: {
     [protocolBitflagKey(CCTP_PROTOCOL)]: {
       name: "CCTP",
@@ -556,7 +556,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // RPI integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_rpi/src/state/access.rs
+  // @anchor_v1/programs/ext_rpi/src/state/access.rs
   [getExtRpiProgramId(staging).toBase58()]: {
     [protocolBitflagKey(RPI_PROTOCOL)]: {
       name: "Rpi",
@@ -621,7 +621,7 @@ export const getProtocolsAndPermissions = (
     },
   },
   // Phoenix integration program protocols and permissions are defined in:
-  // @anchor/programs/ext_phoenix/src/state/access.rs
+  // @anchor_v1/programs/ext_phoenix/src/state/access.rs
   [getExtPhoenixProgramId(staging).toBase58()]: {
     [protocolBitflagKey(PHOENIX_PROTOCOL)]: {
       name: "Phoenix",

@@ -1263,6 +1263,569 @@ export type ExtLoopscale = {
       ]
     },
     {
+      "name": "priceLoopscaleLoans",
+      "docs": [
+        "Price the vault's Loopscale loans and record the amount on the GLAM state."
+      ],
+      "discriminator": [
+        106,
+        180,
+        138,
+        193,
+        90,
+        3,
+        24,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                227,
+                199,
+                235,
+                230,
+                176,
+                132,
+                243,
+                117,
+                43,
+                131,
+                173,
+                18,
+                78,
+                255,
+                26,
+                50,
+                209,
+                135,
+                86,
+                219,
+                140,
+                126,
+                61,
+                255,
+                0,
+                218,
+                252,
+                224,
+                172,
+                8,
+                223,
+                207
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "priceLoopscaleStrategies",
+      "docs": [
+        "Price the vault's Loopscale lender strategies and record the amount on the GLAM state."
+      ],
+      "discriminator": [
+        169,
+        52,
+        25,
+        11,
+        96,
+        138,
+        10,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                227,
+                199,
+                235,
+                230,
+                176,
+                132,
+                243,
+                117,
+                43,
+                131,
+                173,
+                18,
+                78,
+                255,
+                26,
+                50,
+                209,
+                135,
+                86,
+                219,
+                140,
+                126,
+                61,
+                255,
+                0,
+                218,
+                252,
+                224,
+                172,
+                8,
+                223,
+                207
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "priceLoopscaleVaultPositions",
+      "docs": [
+        "Price the vault's Loopscale user vault positions and record the amount on the GLAM state."
+      ],
+      "discriminator": [
+        98,
+        229,
+        99,
+        154,
+        94,
+        139,
+        124,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                227,
+                199,
+                235,
+                230,
+                176,
+                132,
+                243,
+                117,
+                43,
+                131,
+                173,
+                18,
+                78,
+                255,
+                26,
+                50,
+                209,
+                135,
+                86,
+                219,
+                140,
+                126,
+                61,
+                255,
+                0,
+                218,
+                252,
+                224,
+                172,
+                8,
+                223,
+                207
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "GLAMpaME8wdTEzxtiYEAa5yD8fZbxZiz2hNtV58RZiEz"
+        }
+      ],
+      "args": [
+        {
+          "name": "numVaults",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "repayPrincipal",
       "docs": [
         "Repay principal on a Loopscale loan.",
@@ -2862,21 +3425,6 @@ export type ExtLoopscale = {
             }
           }
         }
-      ]
-    }
-  ],
-  "accounts": [
-    {
-      "name": "stateAccount",
-      "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
       ]
     }
   ],

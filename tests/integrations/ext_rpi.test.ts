@@ -8,8 +8,8 @@ import {
   USDC,
   WSOL,
   stringToChars,
-  getIntegrationAuthorityPda,
 } from "../../src";
+import { extRegisteredPositionsPricerIx } from "../../src/utils/extPricing";
 import {
   airdrop,
   createGlamStateForTest,
@@ -118,23 +118,14 @@ describe("ext_rpi", () => {
   const glamClient = new GlamClient();
   const glamClientDelegate = new GlamClient({ wallet: new Wallet(delegate) });
 
-  // Exercise the mint-hosted RPI pricer shared by both program trees.
-  // SDK routing and the v1 ext-hosted pricer have separate SDK and LiteSVM coverage.
+  // ext_rpi hosts the RPI pricer, and only its anchor_v1 build carries it.
   const priceRegisteredPositions = async () => {
-    const priceIx = await glamClient.mintProgram.methods
-      .priceRegisteredPositions()
-      .accountsStrict({
-        glamState: glamClient.statePda,
-        signer: glamClient.signer,
-        observationState: glamClient.rpi.getObservationStatePda(),
-        integrationAuthority: getIntegrationAuthorityPda(
-          glamClient.mintProgram.programId,
-        ),
-        glamProtocol: glamClient.protocolProgram.programId,
-        eventAuthority: null,
-        eventProgram: null,
-      })
-      .instruction();
+    const priceIx = extRegisteredPositionsPricerIx({
+      programId: glamClient.extRpiProgram.programId,
+      glamState: glamClient.statePda,
+      observationState: glamClient.rpi.getObservationStatePda(),
+      glamProtocolProgram: glamClient.protocolProgram.programId,
+    });
     const priceTx = await glamClient.rpi.txBuilder.buildVersionedTx(
       [priceIx],
       txOptions,
@@ -277,7 +268,7 @@ describe("ext_rpi", () => {
     ).not.toBe("0");
   });
 
-  it("Validates observations and prices RPI through glam_mint", async () => {
+  it("Validates observations and prices RPI through ext_rpi", async () => {
     await glamClientDelegate.rpi.validateObservation(
       valuedPosition.toBytes(),
       txOptions,

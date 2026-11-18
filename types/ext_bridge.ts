@@ -487,7 +487,7 @@ export type ExtBridge = {
               },
               {
                 "kind": "arg",
-                "path": "args.transfer_id"
+                "path": "args.transferId"
               }
             ]
           }
@@ -1069,7 +1069,7 @@ export type ExtBridge = {
               },
               {
                 "kind": "arg",
-                "path": "args.transfer_id"
+                "path": "args.transferId"
               }
             ]
           }
@@ -1793,19 +1793,6 @@ export type ExtBridge = {
         173,
         141,
         184
-      ]
-    },
-    {
-      "name": "stateAccount",
-      "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
       ]
     }
   ],

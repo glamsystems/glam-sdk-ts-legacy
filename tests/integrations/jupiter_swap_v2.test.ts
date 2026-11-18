@@ -170,8 +170,13 @@ describe("jupiter_swap_v2", () => {
       );
       expect(txSig).toBeUndefined();
     } catch (e: any) {
-      // Expected to fail: missing oracle accounts when quote price check is required
-      expect(e.message).toMatch(/missing|MissingAccount|Account/i);
+      // Expected to fail: the quote price check is required, the SDK resolves the oracles
+      // from glam_config, and the anchor/ localnet holds no valid mSOL oracle, so the program
+      // refuses them (InvalidPricingOracle). Where the Marinade state is a fixture, as on the
+      // anchor_v1 localnet, the check runs on real prices and this case does not hold.
+      expect(e.message).toMatch(
+        /missing|MissingAccount|Account|Invalid oracle/i,
+      );
     }
   }, 15_000);
 
@@ -271,7 +276,9 @@ describe("jupiter_swap_v2", () => {
       );
       expect(txSig).toBeUndefined();
     } catch (e: any) {
-      expect(e.message).toMatch(/missing|MissingAccount|Account|unauthorized/i);
+      expect(e.message).toMatch(
+        /missing|MissingAccount|Account|unauthorized|Invalid oracle/i,
+      );
     }
   }, 30_000);
 

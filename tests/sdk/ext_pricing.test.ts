@@ -18,25 +18,25 @@ import {
 
 /**
  * `extPricing.ts` encodes the ext-hosted pricers from the program source
- * rather than from a generated document, so this suite holds it to that
- * source: the discriminator rule, the `#[derive(Accounts)]` struct of each
- * pricer in `anchor_v1/programs`, and the argument list the mint pricer of the
- * same name declares in the tracked glam_mint document.
+ * rather than from a generated document, so this suite holds it to both: the
+ * discriminator rule, the `#[derive(Accounts)]` struct of each pricer in
+ * `anchor_v1/programs`, and the discriminator and argument list the program's
+ * tracked document declares.
  */
 const REPO = path.resolve(__dirname, "../../..");
 const V1_PROGRAMS = path.join(REPO, "anchor_v1/programs");
-const MINT_IDL = JSON.parse(
-  fs.readFileSync(
-    path.join(REPO, "anchor/target/idl/glam_mint-staging.json"),
-    "utf8",
-  ),
-) as {
-  instructions: Array<{
-    name: string;
-    discriminator: number[];
-    args: Array<{ name: string; type: string }>;
-  }>;
+const TRACKED_IDLS = path.join(REPO, "anchor/target/idl");
+
+type TrackedInstruction = {
+  name: string;
+  discriminator: number[];
+  args: Array<{ name: string; type: string }>;
 };
+
+function trackedInstructions(document: string): TrackedInstruction[] {
+  return JSON.parse(fs.readFileSync(path.join(TRACKED_IDLS, document), "utf8"))
+    .instructions;
+}
 
 const NAMES = Object.keys(EXT_PRICER_DISCRIMINATORS) as ExtPricerName[];
 const POSITION_PRICERS = NAMES.filter(
@@ -155,19 +155,19 @@ function countFor(name: ExtPricerName): number | undefined {
 }
 
 describe.each(NAMES)("%s", (name) => {
-  const mintPricer = MINT_IDL.instructions.find(
+  // The crate directory of the pricer's Accounts struct names its program.
+  const program = ACCOUNTS_STRUCTS[name].file.split("/")[0];
+  const tracked = trackedInstructions(`${program}-staging.json`).find(
     (instruction) => instruction.name === name,
   )!;
 
-  it("carries the discriminator Anchor derives from its name, the mint pricer's", () => {
+  it("carries the discriminator Anchor derives from its name, the tracked document's", () => {
     const derived = createHash("sha256")
       .update(`global:${name}`)
       .digest()
       .subarray(0, 8);
     expect(Buffer.from(EXT_PRICER_DISCRIMINATORS[name])).toEqual(derived);
-    expect(mintPricer.discriminator).toEqual([
-      ...EXT_PRICER_DISCRIMINATORS[name],
-    ]);
+    expect(tracked.discriminator).toEqual([...EXT_PRICER_DISCRIMINATORS[name]]);
   });
 
   it("names the accounts of the program's Accounts struct, in its order", () => {
@@ -184,11 +184,11 @@ describe.each(NAMES)("%s", (name) => {
     expect(ix.keys.every(({ isSigner }) => !isSigner)).toBe(true);
   });
 
-  it("takes the arguments the mint pricer of the same name takes", () => {
+  it("takes the arguments the tracked document declares", () => {
     const u8Arg = (EXT_PRICER_U8_ARG as Record<string, string | undefined>)[
       name
     ];
-    expect(mintPricer.args).toEqual(
+    expect(tracked.args).toEqual(
       u8Arg === undefined ? [] : [{ name: u8Arg, type: "u8" }],
     );
     const ix = build(name, countFor(name));
@@ -240,23 +240,18 @@ describe("extPricerIx", () => {
     }
   });
 
-  it("covers every ext-hosted pricer the v1 tree declares", () => {
-    const additions = JSON.parse(
-      fs.readFileSync(
-        path.join(REPO, "anchor_v1/tools/idl-additions.json"),
-        "utf8",
-      ),
-    ).additions as Record<string, { instructions: string[] }>;
-    const declared = Object.values(additions).flatMap(
-      ({ instructions }) => instructions,
-    );
-    // The v1 tree also declares additions that are not pricers (Phoenix's
-    // conditional orders and native SOL transfers); this suite covers the
-    // pricers among them.
-    const declaredPricers = declared.filter((name) =>
-      name.startsWith("price_"),
-    );
-    expect([...declaredPricers].sort()).toEqual([...NAMES].sort());
+  it("covers every pricer the tracked ext documents declare", () => {
+    const declared = fs
+      .readdirSync(TRACKED_IDLS)
+      .filter((file) => /^ext_\w+-staging\.json$/.test(file))
+      .flatMap((file) => trackedInstructions(file))
+      .map(({ name }) => name)
+      // ext_bridge's pricer is built through its Anchor program, not here.
+      .filter(
+        (name) =>
+          name.startsWith("price_") && name !== "price_managed_transfers",
+      );
+    expect([...declared].sort()).toEqual([...NAMES].sort());
     expect(POSITION_PRICERS).toHaveLength(NAMES.length - 1);
   });
 });

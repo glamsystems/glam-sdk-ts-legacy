@@ -14,6 +14,99 @@ export type ExtRpi = {
   },
   "instructions": [
     {
+      "name": "priceRegisteredPositions",
+      "docs": [
+        "Price the vault's registered positions and record the amount on the GLAM state."
+      ],
+      "discriminator": [
+        90,
+        157,
+        162,
+        50,
+        236,
+        16,
+        188,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "observationState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  98,
+                  115,
+                  101,
+                  114,
+                  118,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "gstgptmbgJVi5f8ZmSRVZjZkDQwqKa3xWuUtD5WmJHz"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "removeRegisteredPosition",
       "docs": [
         "Remove a registered position from the registry.",
@@ -569,7 +662,7 @@ export type ExtRpi = {
               },
               {
                 "kind": "arg",
-                "path": "input.position_id"
+                "path": "input.positionId"
               }
             ]
           }
@@ -657,7 +750,7 @@ export type ExtRpi = {
               },
               {
                 "kind": "arg",
-                "path": "input.position_id"
+                "path": "input.positionId"
               }
             ]
           }
@@ -708,7 +801,7 @@ export type ExtRpi = {
               },
               {
                 "kind": "arg",
-                "path": "input.position_id"
+                "path": "input.positionId"
               }
             ]
           }
@@ -898,19 +991,6 @@ export type ExtRpi = {
         9,
         165,
         132
-      ]
-    },
-    {
-      "name": "stateAccount",
-      "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
       ]
     },
     {

@@ -1424,6 +1424,390 @@ export type ExtJupiter = {
       ]
     },
     {
+      "name": "priceJupiterBorrowPositions",
+      "docs": [
+        "Prices the vault's Jupiter Borrow position PDAs and records the amount on the GLAM state.",
+        "",
+        "Extra accounts for pricing N borrow positions:",
+        "- (position, position_token_account, vault_config, vault_state, current_tick, supply_oracle, borrow_oracle) x N",
+        "",
+        "Clients should prepend Jupiter Vaults `update_exchange_prices`",
+        "instructions for every distinct vault."
+      ],
+      "discriminator": [
+        55,
+        251,
+        33,
+        55,
+        80,
+        17,
+        18,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                55,
+                49,
+                193,
+                142,
+                247,
+                75,
+                193,
+                33,
+                61,
+                5,
+                218,
+                254,
+                219,
+                143,
+                206,
+                156,
+                138,
+                14,
+                32,
+                89,
+                232,
+                248,
+                173,
+                46,
+                77,
+                46,
+                206,
+                189,
+                171,
+                68,
+                237
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "gstgptmbgJVi5f8ZmSRVZjZkDQwqKa3xWuUtD5WmJHz"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "priceJupiterEarnPositions",
+      "docs": [
+        "Prices the vault's Jupiter Earn fToken ATAs and records the amount on the GLAM state.",
+        "",
+        "Extra accounts for pricing N earn positions:",
+        "- (f_token_ata, lending, underlying_oracle) x N",
+        "",
+        "Clients should prepend Jupiter Lending `update_rate` instructions for",
+        "every distinct lending account."
+      ],
+      "discriminator": [
+        120,
+        10,
+        10,
+        137,
+        145,
+        60,
+        164,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "glamState",
+          "writable": true
+        },
+        {
+          "name": "glamVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "glamState"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                55,
+                49,
+                193,
+                142,
+                247,
+                75,
+                193,
+                33,
+                61,
+                5,
+                218,
+                254,
+                219,
+                143,
+                206,
+                156,
+                138,
+                14,
+                32,
+                89,
+                232,
+                248,
+                173,
+                46,
+                77,
+                46,
+                206,
+                189,
+                171,
+                68,
+                237
+              ]
+            }
+          }
+        },
+        {
+          "name": "solUsdOracle"
+        },
+        {
+          "name": "baseAssetOracle"
+        },
+        {
+          "name": "integrationAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  116,
+                  101,
+                  103,
+                  114,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "glamConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  45,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                10,
+                11,
+                0,
+                83,
+                72,
+                16,
+                46,
+                144,
+                46,
+                42,
+                79,
+                22,
+                157,
+                123,
+                21,
+                242,
+                192,
+                146,
+                1,
+                78,
+                88,
+                59,
+                102,
+                9,
+                190,
+                226,
+                92,
+                189,
+                187,
+                232,
+                83,
+                220
+              ]
+            }
+          }
+        },
+        {
+          "name": "glamProtocolProgram",
+          "address": "gstgptmbgJVi5f8ZmSRVZjZkDQwqKa3xWuUtD5WmJHz"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "setBorrowPolicy",
       "docs": [
         "Set the Jupiter Borrow policy on the GLAM state."
@@ -1503,21 +1887,6 @@ export type ExtJupiter = {
             }
           }
         }
-      ]
-    }
-  ],
-  "accounts": [
-    {
-      "name": "stateAccount",
-      "discriminator": [
-        142,
-        247,
-        54,
-        95,
-        85,
-        133,
-        249,
-        103
       ]
     }
   ],
