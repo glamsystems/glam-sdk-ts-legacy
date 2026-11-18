@@ -23,6 +23,7 @@
     "ts-node": "10.9.2",
     "typescript": "5.9.2"
   },
+  "packageManager": "pnpm@10.34.7",
   "pnpm": {
     "overrides": {
       "bigint-buffer@1.1.5": "npm:@exodus/bigint-buffer@1.1.5-exodus.1",
