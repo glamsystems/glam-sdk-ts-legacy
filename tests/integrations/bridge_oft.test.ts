@@ -1,3 +1,6 @@
+import { readFileSync } from "fs";
+import { resolve } from "path";
+
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import {
@@ -32,6 +35,15 @@ const quotedOutAmount = new BN(9_900_000);
 const sourceMint = USDC;
 const mintAuthority = loadWalletFromDisk("./tests/test-keypair.json").payer;
 
+// A LayerZero mock's IDL as the anchor_v1 build wrote it, kept beside this suite: the mocks
+// are test doubles, so nothing publishes their IDL under target/idl.
+const loadMockProgram = (name: string): anchor.Program<any> =>
+  new anchor.Program(
+    JSON.parse(
+      readFileSync(resolve(__dirname, "idl", `${name}.json`), "utf-8"),
+    ),
+  );
+
 const createCommittedOftTransfer = async (
   params: {
     managed?: boolean;
@@ -45,9 +57,10 @@ const createCommittedOftTransfer = async (
     params.routeManagementMode ??
     (managed ? RouteManagementMode.ManagedOnly : RouteManagementMode.Either);
   const glamClient = new GlamClient();
-  const mockLayerzeroEndpointProgram = anchor.workspace
-    .MockLayerzeroEndpoint as anchor.Program<any>;
-  const mockLayerzeroOftProgram = anchor.workspace.MockLayerzeroOft as any;
+  const mockLayerzeroEndpointProgram = loadMockProgram(
+    "mock_layerzero_endpoint",
+  );
+  const mockLayerzeroOftProgram = loadMockProgram("mock_layerzero_oft") as any;
   const destinationRecipient = Keypair.generate().publicKey;
   const oftStore = Keypair.generate().publicKey;
   const transferId = Keypair.generate().publicKey;

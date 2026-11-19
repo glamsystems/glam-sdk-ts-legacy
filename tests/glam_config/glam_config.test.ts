@@ -488,7 +488,7 @@ describe("glam_config", () => {
     try {
       // Try to update with invalid fee values
       await program.methods
-        .updateProtocolFees(101, 20000) // > 1% base fee, > 100% flow fee
+        .updateProtocolFees(101, 20000) // above both caps
         .accounts({
           feeAuthority: feeAuthority.publicKey,
         })
@@ -503,10 +503,12 @@ describe("glam_config", () => {
     }
   });
 
+  // The caps are MAX_PROTOCOL_BASE_FEE_BPS = 50 and MAX_PROTOCOL_FLOW_FEE_BPS = 2000
+  // (anchor/libs/common/src/constants.rs).
   it("Can update fees with boundary values", async () => {
     // Test baseFeeBps = 0 (valid minimum)
     await program.methods
-      .updateProtocolFees(0, 5000)
+      .updateProtocolFees(0, 2000)
       .accounts({
         feeAuthority: feeAuthority.publicKey,
       })
@@ -516,11 +518,11 @@ describe("glam_config", () => {
     let globalConfig =
       await program.account.globalConfig.fetch(globalConfigPDA);
     expect(globalConfig.baseFeeBps).toEqual(0);
-    expect(globalConfig.flowFeeBps).toEqual(5000);
+    expect(globalConfig.flowFeeBps).toEqual(2000);
 
-    // Test baseFeeBps = 100 (valid maximum - 1%)
+    // Test baseFeeBps = 50 (valid maximum, 0.5%)
     await program.methods
-      .updateProtocolFees(100, 5000)
+      .updateProtocolFees(50, 2000)
       .accounts({
         feeAuthority: feeAuthority.publicKey,
       })
@@ -528,7 +530,7 @@ describe("glam_config", () => {
       .rpc();
 
     globalConfig = await program.account.globalConfig.fetch(globalConfigPDA);
-    expect(globalConfig.baseFeeBps).toEqual(100);
+    expect(globalConfig.baseFeeBps).toEqual(50);
 
     // Test flowFeeBps = 0 (valid minimum)
     await program.methods
@@ -542,9 +544,9 @@ describe("glam_config", () => {
     globalConfig = await program.account.globalConfig.fetch(globalConfigPDA);
     expect(globalConfig.flowFeeBps).toEqual(0);
 
-    // Test flowFeeBps = 10000 (valid maximum - 100%)
+    // Test flowFeeBps = 2000 (valid maximum, 20%)
     await program.methods
-      .updateProtocolFees(50, 10000)
+      .updateProtocolFees(50, 2000)
       .accounts({
         feeAuthority: feeAuthority.publicKey,
       })
@@ -552,34 +554,34 @@ describe("glam_config", () => {
       .rpc();
 
     globalConfig = await program.account.globalConfig.fetch(globalConfigPDA);
-    expect(globalConfig.flowFeeBps).toEqual(10000);
+    expect(globalConfig.flowFeeBps).toEqual(2000);
   });
 
   it("Rejects fees at exact boundary invalid values", async () => {
-    // Test baseFeeBps = 101 (min invalid)
+    // Test baseFeeBps = 51 (min invalid) with a valid flow fee
     try {
       await program.methods
-        .updateProtocolFees(101, 5000)
+        .updateProtocolFees(51, 2000)
         .accounts({
           feeAuthority: feeAuthority.publicKey,
         })
         .signers([feeAuthority])
         .rpc();
-      fail("Should have thrown an error for baseFeeBps > 100");
+      fail("Should have thrown an error for baseFeeBps > 50");
     } catch (error: any) {
       expect(error.toString()).toContain("InvalidParameters");
     }
 
-    // Test flowFeeBps = 10001 (min invalid)
+    // Test flowFeeBps = 2001 (min invalid) with a valid base fee
     try {
       await program.methods
-        .updateProtocolFees(50, 10001)
+        .updateProtocolFees(50, 2001)
         .accounts({
           feeAuthority: feeAuthority.publicKey,
         })
         .signers([feeAuthority])
         .rpc();
-      fail("Should have thrown an error for flowFeeBps > 10000");
+      fail("Should have thrown an error for flowFeeBps > 2000");
     } catch (error: any) {
       expect(error.toString()).toContain("InvalidParameters");
     }
@@ -891,11 +893,11 @@ describe("glam_config", () => {
     // Test various valid fee combinations
     const validCombinations = [
       { baseFeeBps: 0, flowFeeBps: 0 }, // Both zero
-      { baseFeeBps: 100, flowFeeBps: 10000 }, // Both max
-      { baseFeeBps: 50, flowFeeBps: 5000 }, // Both middle
-      { baseFeeBps: 0, flowFeeBps: 10000 }, // Min base, max flow
-      { baseFeeBps: 100, flowFeeBps: 0 }, // Max base, min flow
-      { baseFeeBps: 25, flowFeeBps: 7500 }, // Quarter and 3/4
+      { baseFeeBps: 50, flowFeeBps: 2000 }, // Both max
+      { baseFeeBps: 25, flowFeeBps: 1000 }, // Both middle
+      { baseFeeBps: 0, flowFeeBps: 2000 }, // Min base, max flow
+      { baseFeeBps: 50, flowFeeBps: 0 }, // Max base, min flow
+      { baseFeeBps: 12, flowFeeBps: 1500 }, // Quarter and 3/4
     ];
 
     for (const { baseFeeBps, flowFeeBps } of validCombinations) {
