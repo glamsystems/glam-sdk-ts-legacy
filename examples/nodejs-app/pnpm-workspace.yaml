@@ -7,6 +7,15 @@
 minimumReleaseAge: 10080
 saveExact: true
 
+# No dependency build script runs here, and none is approved. The pinned pnpm
+# fails an install on a build script nobody approved, and on the record of one
+# that an earlier install left in node_modules. strictDepBuilds turns that
+# failure off, and ignoreScripts keeps pnpm from writing a placeholder for
+# each such package into this file. `pnpm run` does not install first.
+ignoreScripts: true
+strictDepBuilds: false
+verifyDepsBeforeRun: false
+
 # Forced dependency versions.
 overrides:
   "bigint-buffer@1.1.5": "npm:@exodus/bigint-buffer@1.1.5-exodus.1"

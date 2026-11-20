@@ -5,7 +5,7 @@ A command-line interface for interacting with GLAM vaults using the GLAM SDK. Th
 ## Prerequisites
 
 - Node.js (v20 or higher)
-- pnpm
+- pnpm 12 as the `pnpm` on PATH; it switches itself to the pin in `package.json`.
 
 ## Setup
 
