@@ -291,6 +291,10 @@ const feeStructureOf = (fees: FeeRates) => ({
         } as const;
         for (const name of stage.integrations ?? [])
           await managerClient.access.enableProtocols(...integrationOf[name]);
+        if (scenario.steps.some((step) => step.action === "wrap")) {
+          const state = await managerClient.fetchStateAccount();
+          await managerClient.state.update({ assets: [...state.assets, WSOL] });
+        }
         if (stage.transferAllowlist) {
           const wallets: Record<string, PublicKey> = { recipient, stranger };
           const policy = new TransferPolicy(
