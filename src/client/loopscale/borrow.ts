@@ -16,6 +16,7 @@ import { PkSet } from "../../utils/pkset";
 import { collectKaminoReserveOracles } from "../kamino/oracles";
 import {
   LoopscaleLoan,
+  type LoopscaleLoanDuration,
   LoopscaleMarketInformation,
   LoopscaleStrategy,
 } from "../../deser";
@@ -54,9 +55,7 @@ import { fetchMintAndTokenProgram } from "../../utils";
 
 export type Tuple5 = [number, number, number, number, number];
 
-export class LoopscaleBorrowClient
-  implements ProtocolPolicyClient<LoopscaleBorrowPolicy>
-{
+export class LoopscaleBorrowClient implements ProtocolPolicyClient<LoopscaleBorrowPolicy> {
   readonly txBuilder: LoopscaleBorrowTxBuilder;
 
   public constructor(private readonly core: LoopscaleCoreClient) {
@@ -167,6 +166,7 @@ export class LoopscaleBorrowClient
     strategy: PublicKey | LoopscaleStrategy;
     collateralMint: PublicKey;
     expectedApy: BN;
+    duration?: LoopscaleLoanDuration;
   }): Promise<BorrowMarketAccounts> {
     return await this.core.resolveBorrowMarketAccounts(params);
   }
@@ -177,6 +177,7 @@ export class LoopscaleBorrowClient
     assetIdentifier: PublicKey;
     expectedApy: BN;
     expectedLqt: Tuple5;
+    duration?: LoopscaleLoanDuration;
   }): Promise<LoopscaleBorrowPrincipalTerms> {
     return await this.core.resolveBorrowTermsFromStrategy(params);
   }

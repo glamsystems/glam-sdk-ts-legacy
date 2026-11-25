@@ -60,9 +60,7 @@ export type CreateStrategyResult = {
   signatures: TransactionSignature[];
 };
 
-export class LoopscaleLendClient
-  implements ProtocolPolicyClient<LoopscaleLendingPolicy>
-{
+export class LoopscaleLendClient implements ProtocolPolicyClient<LoopscaleLendingPolicy> {
   readonly txBuilder: LoopscaleLendTxBuilder;
 
   public constructor(private readonly core: LoopscaleCoreClient) {

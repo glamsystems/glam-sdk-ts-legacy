@@ -1,5 +1,6 @@
 import { BN } from "@coral-xyz/anchor";
 import {
+  bool,
   struct,
   i16,
   u8,
@@ -13,6 +14,13 @@ import {
 } from "@coral-xyz/borsh";
 import { PublicKey } from "@solana/web3.js";
 import { createHash } from "crypto";
+
+import type {
+  RpiDenominationSpecInput,
+  RpiNativeCustodyKindInput,
+  RpiRegisteredPositionTypeInput,
+  RpiRegisteredSourceTypeInput,
+} from "../client/rpi";
 
 export class MintPolicy {
   lockupPeriod: number;
@@ -1155,6 +1163,119 @@ export class TransferRateLimitPolicy {
         mint.toBuffer(),
       ],
       programId,
+    );
+  }
+}
+
+// ext_rpi stores its enums as one byte each, by variant order.
+const RPI_POSITION_TYPES = ["valued", "tokenized"] as const;
+const RPI_SOURCE_TYPES = ["trusted", "native", "wormhole"] as const;
+const RPI_DENOMINATIONS = ["usd", "mint"] as const;
+const RPI_CUSTODY_KINDS = ["splToken", "nativeSol"] as const;
+
+function rpiVariant<T>(
+  variants: readonly string[],
+  index: number,
+  label: string,
+): T {
+  const variant = variants[index];
+  if (variant === undefined) {
+    throw new Error(`Invalid RPI ${label} ${index}`);
+  }
+  return { [variant]: {} } as T;
+}
+
+/** One registered position of an RPI policy, its enums in Anchor's object form. */
+export interface RpiPositionConfig {
+  positionId: number[];
+  positionType: RpiRegisteredPositionTypeInput;
+  sourceType: RpiRegisteredSourceTypeInput;
+  denomination: RpiDenominationSpecInput;
+  nativeCustodyAccount: PublicKey;
+  nativeCustodyKind: RpiNativeCustodyKindInput;
+  enabled: boolean;
+  freshnessOverrideSecs: number;
+  submitAllowlist: PublicKey[];
+  validateAllowlist: PublicKey[];
+  configureAllowlist: PublicKey[];
+}
+
+/**
+ * ext_rpi's protocol policy: the vault's default observation freshness and
+ * one configuration per registered position, as RpiPolicy is serialized.
+ */
+export class RpiPolicy {
+  static _positionLayout = struct([
+    array(u8(), 32, "positionId"),
+    u8("positionType"),
+    u8("sourceType"),
+    struct([u8("denom"), publicKey("mint")], "denomination"),
+    publicKey("nativeCustodyAccount"),
+    u8("nativeCustodyKind"),
+    bool("enabled"),
+    u32("freshnessOverrideSecs"),
+    vec(publicKey(), "submitAllowlist"),
+    vec(publicKey(), "validateAllowlist"),
+    vec(publicKey(), "configureAllowlist"),
+  ]);
+
+  static _layout = struct([
+    u32("defaultFreshnessSecs"),
+    vec(RpiPolicy._positionLayout, "positions"),
+  ]);
+
+  constructor(
+    readonly defaultFreshnessSecs: number,
+    readonly positions: RpiPositionConfig[],
+  ) {}
+
+  public static decode(buffer: Buffer<ArrayBufferLike>): RpiPolicy {
+    const raw = RpiPolicy._layout.decode(buffer) as {
+      defaultFreshnessSecs: number;
+      positions: any[];
+    };
+    return new RpiPolicy(
+      raw.defaultFreshnessSecs,
+      raw.positions.map((position) => ({
+        positionId: Array.from(position.positionId as number[]),
+        positionType: rpiVariant(
+          RPI_POSITION_TYPES,
+          position.positionType,
+          "position type",
+        ),
+        sourceType: rpiVariant(
+          RPI_SOURCE_TYPES,
+          position.sourceType,
+          "source type",
+        ),
+        denomination: {
+          denom: rpiVariant(
+            RPI_DENOMINATIONS,
+            position.denomination.denom,
+            "denomination",
+          ),
+          mint: position.denomination.mint,
+        },
+        nativeCustodyAccount: position.nativeCustodyAccount,
+        nativeCustodyKind: rpiVariant(
+          RPI_CUSTODY_KINDS,
+          position.nativeCustodyKind,
+          "custody kind",
+        ),
+        enabled: position.enabled,
+        freshnessOverrideSecs: position.freshnessOverrideSecs,
+        submitAllowlist: position.submitAllowlist,
+        validateAllowlist: position.validateAllowlist,
+        configureAllowlist: position.configureAllowlist,
+      })),
+    );
+  }
+
+  /** The configuration of a registered position, by its 32-byte id. */
+  position(positionId: ArrayLike<number>): RpiPositionConfig | undefined {
+    const id = Buffer.from(Array.from(positionId));
+    return this.positions.find((position) =>
+      Buffer.from(position.positionId).equals(id),
     );
   }
 }

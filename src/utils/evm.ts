@@ -1,7 +1,29 @@
 import { PublicKey } from "@solana/web3.js";
 
-export const evmAddressToBytes32 = (address: string): string =>
-  `0x000000000000000000000000${address.replace("0x", "")}`;
+/**
+ * Validates if a string is a valid EVM address (40 hex characters)
+ */
+export const isValidEvmAddress = (addr: string): boolean => {
+  const cleanAddr = addr.startsWith("0x") ? addr.slice(2) : addr;
+  return /^[0-9a-fA-F]{40}$/.test(cleanAddr);
+};
+
+/**
+ * The 32 bytes CCTP takes for a recipient, as 0x and 64 hexadecimal digits:
+ * an EVM address, 40 digits, left-padded with zeros, or a recipient's own 32
+ * bytes, 64 digits, each with 0x, 0X or neither before them. Any other text
+ * is refused: the bytes are read two digits at a time, and other text gave
+ * another recipient.
+ */
+export const evmAddressToBytes32 = (address: string): string => {
+  const hex = /^0[xX]/.test(address) ? address.slice(2) : address;
+  if (!/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/.test(hex)) {
+    throw new Error(
+      `Invalid EVM address ${address}: an address is 40 hexadecimal digits, or 64 for a 32-byte recipient, with or without 0x`,
+    );
+  }
+  return `0x${hex.padStart(64, "0")}`;
+};
 
 export const hexToBytes = (hex: string) => {
   if (hex.startsWith("0x")) hex = hex.slice(2);
@@ -27,12 +49,4 @@ export const publicKeyToEvmAddress = (publicKey: PublicKey): string => {
   // EVM addresses are the last 20 bytes (40 hex characters) of the 32-byte public key
   const evmAddress = hex.slice(-40);
   return `0x${evmAddress}`;
-};
-
-/**
- * Validates if a string is a valid EVM address (40 hex characters)
- */
-export const isValidEvmAddress = (addr: string): boolean => {
-  const cleanAddr = addr.startsWith("0x") ? addr.slice(2) : addr;
-  return /^[0-9a-fA-F]{40}$/.test(cleanAddr);
 };

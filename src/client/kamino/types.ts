@@ -46,6 +46,21 @@ export interface ParsedFarmState {
   farmTokenDecimals: BN;
   farmTokenProgram: PublicKey;
   farmVault: PublicKey;
+  // The active pool: the farm token staked, in base units, and the stake
+  // shares that stand for it. An unstake takes shares and is paid at this rate.
+  totalStakedAmount: BN;
+  totalActiveStakeScaled: BN;
+  // How long an unstake waits before its tokens can be withdrawn, in the
+  // farm's time unit: 0 for seconds, 1 for slots.
+  withdrawalCooldownPeriod: number;
+  timeUnit: number;
+  // The lock an unstake pays the early withdrawal penalty inside. Mode 0
+  // locks nothing, 1 locks from each user's last stake and 2 from
+  // lockingStartTimestamp, each for lockingDuration in the farm's time unit.
+  lockingMode: BN;
+  lockingStartTimestamp: BN;
+  lockingDuration: BN;
+  lockingEarlyWithdrawalPenaltyBps: BN;
   rewards: {
     index: number;
     mint: PublicKey;
@@ -59,4 +74,8 @@ export interface ParsedFarmUser {
   pubkey: PublicKey;
   farmState: PublicKey;
   unclaimedRewards: BN[];
+  // The owner's stake shares in the farm's active pool.
+  activeStakeScaled: BN;
+  // When the owner last staked, in the farm's time unit.
+  lastStakeTs: BN;
 }

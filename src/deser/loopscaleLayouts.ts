@@ -152,8 +152,10 @@ export class LoopscaleStrategy extends Decodable {
   ]);
 
   /**
-   * Returns the duration index whose collateral term for the given asset
-   * matches `expectedApy`, or null if no populated slot matches.
+   * Returns the first duration index whose collateral term for the given
+   * asset matches `expectedApy`, or null if no populated slot matches. A
+   * strategy may lend several terms at one APY, so the first match is not
+   * the slot of a given term.
    */
   durationIndexForApy(
     collateralAssetIndex: number,

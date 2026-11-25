@@ -17,7 +17,11 @@ export function getProtocolNamesFromBitmask(
   bitmask: number,
   staging: boolean,
 ): string[] {
-  const { protocols } = parseProtocolsBitmask(integrationProgram, bitmask, staging);
+  const { protocols } = parseProtocolsBitmask(
+    integrationProgram,
+    bitmask,
+    staging,
+  );
   return protocols.map((p) => p.name);
 }
 

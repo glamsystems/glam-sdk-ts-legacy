@@ -184,6 +184,40 @@ export type TokenAccount = {
   frozen: boolean;
 };
 
+/**
+ * `error`, carrying the id of a transaction the RPC did not acknowledge as
+ * `unacknowledgedSignature`, when there is one.
+ */
+function withUnacknowledgedSignature(
+  error: unknown,
+  signature: string | null,
+): unknown {
+  if (!signature) {
+    return error;
+  }
+  const carrier = error instanceof Error ? error : new Error(String(error));
+  Object.defineProperty(carrier, "unacknowledgedSignature", {
+    value: signature,
+    enumerable: false,
+  });
+  return carrier;
+}
+
+/**
+ * A signed transaction's id, its first signature, in base58; null when the
+ * first signature is still unset.
+ */
+function firstSignature(tx: VersionedTransaction | Transaction): string | null {
+  const signature =
+    typeof (tx as Transaction).partialSign === "function"
+      ? (tx as Transaction).signature
+      : // A transaction built by another web3.js may not carry its signatures.
+        (tx as VersionedTransaction).signatures?.[0];
+  return signature && signature.some((byte) => byte !== 0)
+    ? anchor.utils.bytes.bs58.encode(signature)
+    : null;
+}
+
 export class BaseClient {
   cluster: ClusterNetwork;
   provider: anchor.Provider;
@@ -191,6 +225,12 @@ export class BaseClient {
   jupiterApiKey?: string;
   jupiterApiClient?: JupiterApiClient;
   phoenixRiseClient?: PhoenixRiseClient;
+  /**
+   * Each hears the id of a transaction `sendAndConfirm` sent, once the RPC
+   * acknowledges it. A send that throws before that carries the id of the
+   * transaction it signed as the error's `unacknowledgedSignature`: it may
+   * still land.
+   */
   public onSentListeners = new Set<(sig: string) => void>();
   readonly staging: boolean;
   /** This host's default transaction version, when it states one. */
@@ -757,20 +797,33 @@ export class BaseClient {
     // And again on what is about to be sent.
     assertV1Envelope(signedTx, serializedTx);
 
+    // The id is the first signature, known before the send. When the RPC
+    // takes the transaction and its answer is lost, the send throws, and the
+    // error carries the id to check on chain before a retry.
+    const signedSig = firstSignature(signedTx);
+
     // skip simulation since we just did it to compute CUs
     // however this means that we need to reconstruct the error, if
     // the tx fails onchain execution.
-    const txSig = await txConnection.sendRawTransaction(serializedTx, {
-      skipPreflight: true,
-    });
-    this.onSentListeners.forEach((fn) => {
-      try {
-        fn(txSig);
-      } catch (e) {
-        // exceptions raised from callbacks are fail-open
-        console.warn("Error in onSent listener:", e);
-      }
-    });
+    let txSig: TransactionSignature;
+    try {
+      txSig = await txConnection.sendRawTransaction(serializedTx, {
+        skipPreflight: true,
+      });
+    } catch (error) {
+      throw withUnacknowledgedSignature(error, signedSig);
+    }
+    // An answer naming another transaction acknowledges nothing this client
+    // signed, and confirming it would report on that other transaction.
+    if (signedSig && txSig !== signedSig) {
+      throw withUnacknowledgedSignature(
+        new Error(
+          `The RPC answered the send of ${signedSig} with the signature ${txSig}, of another transaction`,
+        ),
+        signedSig,
+      );
+    }
+    this.notifySent(txSig);
 
     if (process.env.NODE_ENV === "development") {
       console.log("Confirming tx:", txSig);
@@ -792,6 +845,17 @@ export class BaseClient {
       );
     }
     return txSig;
+  }
+
+  private notifySent(txSig: string) {
+    this.onSentListeners.forEach((fn) => {
+      try {
+        fn(txSig);
+      } catch (e) {
+        // exceptions raised from callbacks are fail-open
+        console.warn("Error in onSent listener:", e);
+      }
+    });
   }
 
   private async confirmTransaction(

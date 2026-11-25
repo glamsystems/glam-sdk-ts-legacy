@@ -427,9 +427,7 @@ class TxBuilder
   };
 }
 
-export class JupiterSwapClient
-  implements ProtocolPolicyClient<JupiterSwapPolicy>
-{
+export class JupiterSwapClient implements ProtocolPolicyClient<JupiterSwapPolicy> {
   public readonly txBuilder: TxBuilder;
   public readonly jupApi: JupiterApiClient;
 

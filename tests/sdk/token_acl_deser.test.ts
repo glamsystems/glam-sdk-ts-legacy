@@ -170,9 +170,7 @@ describe("token_acl_deser", () => {
       buf[2] = 1; // enablePermissionlessThaw
       buf[3] = 0; // enablePermissionlessFreeze
 
-      const mint = new PublicKey(
-        "So11111111111111111111111111111111111111112",
-      );
+      const mint = new PublicKey("So11111111111111111111111111111111111111112");
       const freezeAuth = new PublicKey(
         "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
       );
@@ -191,12 +189,8 @@ describe("token_acl_deser", () => {
       expect(config.enablePermissionlessThaw).toEqual(1);
       expect(config.enablePermissionlessFreeze).toEqual(0);
       expect(config.mint.toBase58()).toEqual(mint.toBase58());
-      expect(config.freezeAuthority.toBase58()).toEqual(
-        freezeAuth.toBase58(),
-      );
-      expect(config.gatingProgram.toBase58()).toEqual(
-        gatingProgram.toBase58(),
-      );
+      expect(config.freezeAuthority.toBase58()).toEqual(freezeAuth.toBase58());
+      expect(config.gatingProgram.toBase58()).toEqual(gatingProgram.toBase58());
     });
   });
 

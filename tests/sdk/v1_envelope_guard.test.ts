@@ -1,4 +1,4 @@
-import type { Wallet } from "@coral-xyz/anchor";
+import { utils, type Wallet } from "@coral-xyz/anchor";
 import {
   Keypair,
   SystemProgram,
@@ -28,10 +28,27 @@ import {
  */
 
 function createClient(wallet: Wallet, blockhash: string) {
+  // The RPC answers a send with the transaction's own id, its first
+  // signature: that of the transaction the wallet handed back.
+  let signed: VersionedTransaction | Transaction | undefined;
+  const recording = {
+    publicKey: wallet.publicKey,
+    signTransaction: async (tx: any) =>
+      (signed = await wallet.signTransaction(tx)),
+    signAllTransactions: wallet.signAllTransactions,
+  } as unknown as Wallet;
+  // A legacy transaction's id is its signature; a versioned one's, the first
+  // of its signatures.
+  const signedId = () =>
+    utils.bytes.bs58.encode(
+      signed instanceof Transaction
+        ? signed.signature!
+        : Buffer.from((signed as VersionedTransaction).signatures[0]),
+    );
   const connection = {
     commitment: "confirmed",
     rpcEndpoint: "http://localhost:8899",
-    sendRawTransaction: jest.fn(async () => "txsig"),
+    sendRawTransaction: jest.fn(async () => signedId()),
     getTransaction: jest.fn(),
   };
 
@@ -41,7 +58,7 @@ function createClient(wallet: Wallet, blockhash: string) {
     provider: {
       connection,
       publicKey: wallet.publicKey,
-      wallet,
+      wallet: recording,
     },
     blockhashWithCache: {
       get: jest.fn(async () => ({ blockhash, lastValidBlockHeight: 1 })),
@@ -53,7 +70,7 @@ function createClient(wallet: Wallet, blockhash: string) {
     value: { err: null },
   }));
 
-  return { client, connection };
+  return { client, connection, signedId };
 }
 
 function transferInstructions(from: Keypair) {
@@ -93,9 +110,9 @@ describe("the version 1 envelope is checked where the bytes leave", () => {
 
   it("sends the version 1 envelope when the transaction keeps its class", async () => {
     const wallet = passthroughWallet();
-    const { client, connection } = createClient(wallet, blockhash);
+    const { client, connection, signedId } = createClient(wallet, blockhash);
 
-    await expect(client.sendAndConfirm(v1Transaction())).resolves.toBe("txsig");
+    expect(await client.sendAndConfirm(v1Transaction())).toBe(signedId());
 
     const sent = connection.sendRawTransaction.mock
       .calls[0][0] as unknown as Uint8Array;
@@ -156,8 +173,7 @@ describe("the version 1 envelope is checked where the bytes leave", () => {
     const rebuilds: Array<(tx: VersionedTransaction) => VersionedTransaction> =
       [
         // Keeps the message and loses the subclass that writes version 1 bytes.
-        (signed) =>
-          new VersionedTransaction(signed.message, signed.signatures),
+        (signed) => new VersionedTransaction(signed.message, signed.signatures),
         // Reads the bytes back: the message is the library's own, which
         // cannot write itself.
         (signed) =>
@@ -173,9 +189,9 @@ describe("the version 1 envelope is checked where the bytes leave", () => {
         }),
         signAllTransactions: jest.fn(),
       } as unknown as Wallet;
-      const { client, connection } = createClient(wallet, blockhash);
+      const { client, connection, signedId } = createClient(wallet, blockhash);
 
-      await expect(client.sendAndConfirm(tx)).resolves.toBe("txsig");
+      expect(await client.sendAndConfirm(tx)).toBe(signedId());
 
       const sent = connection.sendRawTransaction.mock
         .calls[0][0] as unknown as Uint8Array;
@@ -186,7 +202,7 @@ describe("the version 1 envelope is checked where the bytes leave", () => {
 
   it("leaves version 0 and legacy transactions alone", async () => {
     const wallet = passthroughWallet();
-    const { client, connection } = createClient(wallet, blockhash);
+    const { client, connection, signedId } = createClient(wallet, blockhash);
 
     const v0 = new VersionedTransaction(
       new TransactionMessage({
@@ -195,7 +211,7 @@ describe("the version 1 envelope is checked where the bytes leave", () => {
         instructions: transferInstructions(payer),
       }).compileToV0Message(),
     );
-    await expect(client.sendAndConfirm(v0)).resolves.toBe("txsig");
+    expect(await client.sendAndConfirm(v0)).toBe(signedId());
     const sentV0 = connection.sendRawTransaction.mock
       .calls[0][0] as unknown as Uint8Array;
     // The version 0 envelope: the compact-u16 signature count comes first.
@@ -210,11 +226,11 @@ describe("the version 1 envelope is checked where the bytes leave", () => {
       signAllTransactions: jest.fn(),
     } as unknown as Wallet;
     const legacy = createClient(legacyWallet, blockhash);
-    await expect(
-      legacy.client.sendAndConfirm(
+    expect(
+      await legacy.client.sendAndConfirm(
         new Transaction().add(...transferInstructions(payer)),
       ),
-    ).resolves.toBe("txsig");
+    ).toBe(legacy.signedId());
   });
 });
 

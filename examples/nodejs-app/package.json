@@ -12,16 +12,19 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": "^24.22.3 || ^26.13.1"
+  },
   "dependencies": {
-    "@glamsystems/glam-sdk": "1.0.4",
+    "@glamsystems/glam-sdk": "1.2.2",
     "@solana/web3.js": "1.99.0",
-    "commander": "11.1.0",
-    "dotenv": "16.6.1"
+    "commander": "15.1.0",
+    "dotenv": "18.0.10"
   },
   "devDependencies": {
-    "@types/node": "20.19.18",
+    "@types/node": "24.19.2",
     "ts-node": "10.9.2",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   },
   "packageManager": "pnpm@12.21.0"
 }

@@ -262,12 +262,11 @@ export class StakeClient {
     amount: BN,
     txOptions: TxOptions = {},
   ): Promise<TransactionSignature> {
-    const [tx] =
-      await this.txBuilder.initializeAndDelegateStakeTx(
-        vote,
-        amount,
-        txOptions,
-      );
+    const [tx] = await this.txBuilder.initializeAndDelegateStakeTx(
+      vote,
+      amount,
+      txOptions,
+    );
     return await this.base.sendAndConfirm(tx);
   }
 

@@ -202,9 +202,7 @@ export type PhoenixOnboardTraderResult = {
 };
 
 export type PhoenixOnboardingPhase =
-  | "registration"
-  | "activation"
-  | "verification";
+  "registration" | "activation" | "verification";
 
 export class PhoenixOnboardingError extends Error {
   readonly phase: PhoenixOnboardingPhase;

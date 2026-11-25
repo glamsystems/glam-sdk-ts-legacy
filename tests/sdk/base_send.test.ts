@@ -1,4 +1,4 @@
-import type { Wallet } from "@coral-xyz/anchor";
+import { utils, type Wallet } from "@coral-xyz/anchor";
 import {
   Keypair,
   SystemProgram,
@@ -14,7 +14,16 @@ describe("BaseClient.sendAndConfirm", () => {
     const connection = {
       commitment: "confirmed",
       rpcEndpoint: "http://localhost:8899",
-      sendRawTransaction: jest.fn(async () => "txsig"),
+      // The RPC answers with the transaction's own id, its first signature.
+      sendRawTransaction: jest.fn(async (raw: Uint8Array) => {
+        try {
+          return utils.bytes.bs58.encode(
+            VersionedTransaction.deserialize(raw).signatures[0],
+          );
+        } catch {
+          return "txsig";
+        }
+      }),
       getTransaction: jest.fn(),
     };
 
@@ -69,8 +78,9 @@ describe("BaseClient.sendAndConfirm", () => {
       }),
     );
 
-    await expect(client.sendAndConfirm(tx)).resolves.toBe("txsig");
+    const sig = await client.sendAndConfirm(tx);
 
+    expect(sig).toBe(utils.bytes.bs58.encode(tx.signature!));
     expect(tx.feePayer?.equals(walletKeypair.publicKey)).toBe(true);
     expect(tx.recentBlockhash).toBe(blockhash);
     expect(wallet.signTransaction).toHaveBeenCalledWith(tx);
@@ -103,10 +113,9 @@ describe("BaseClient.sendAndConfirm", () => {
     );
     const signSpy = jest.spyOn(tx, "sign");
 
-    await expect(client.sendAndConfirm(tx, [extraSigner])).resolves.toBe(
-      "txsig",
-    );
+    const sig = await client.sendAndConfirm(tx, [extraSigner]);
 
+    expect(sig).toBe(utils.bytes.bs58.encode(tx.signature!));
     expect(signSpy).not.toHaveBeenCalled();
     expect(connection.sendRawTransaction).toHaveBeenCalledTimes(1);
   });
@@ -143,10 +152,9 @@ describe("BaseClient.sendAndConfirm", () => {
     );
     const signSpy = jest.spyOn(tx, "sign");
 
-    await expect(client.sendAndConfirm(tx, [extraSigner])).resolves.toBe(
-      "txsig",
-    );
+    const sig = await client.sendAndConfirm(tx, [extraSigner]);
 
+    expect(sig).toBe(utils.bytes.bs58.encode(tx.signatures[0]));
     expect(signSpy).toHaveBeenCalledWith([walletKeypair]);
     expect(signSpy).toHaveBeenCalledWith([extraSigner]);
     expect(connection.sendRawTransaction).toHaveBeenCalledTimes(1);
@@ -178,5 +186,110 @@ describe("BaseClient.sendAndConfirm", () => {
 
     expect(signedTx.sign).toHaveBeenCalledWith([extraSigner]);
     expect(connection.sendRawTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  // The RPC can take a transaction and lose its answer, and the listeners
+  // heard a signature only from the answer, so nothing named the id to check
+  // before a retry, of a burn say. An answer naming another transaction was
+  // confirmed in its place.
+  describe("an answer the RPC lost or gave for another transaction", () => {
+    const walletKeypair = Keypair.generate();
+    const blockhash = Keypair.generate().publicKey.toBase58();
+    const transfer = () =>
+      SystemProgram.transfer({
+        fromPubkey: walletKeypair.publicKey,
+        toPubkey: Keypair.generate().publicKey,
+        lamports: 1,
+      });
+    const versioned = () =>
+      new VersionedTransaction(
+        new TransactionMessage({
+          payerKey: walletKeypair.publicKey,
+          recentBlockhash: blockhash,
+          instructions: [transfer()],
+        }).compileToV0Message(),
+      );
+
+    function listening() {
+      const wallet = {
+        publicKey: walletKeypair.publicKey,
+        signTransaction: jest.fn(
+          async (tx: VersionedTransaction | Transaction) => {
+            if (tx instanceof Transaction) {
+              tx.partialSign(walletKeypair);
+            } else {
+              tx.sign([walletKeypair]);
+            }
+            return tx;
+          },
+        ),
+        signAllTransactions: jest.fn(),
+      } as unknown as Wallet;
+      const { client, connection } = createClient(wallet, blockhash);
+      const heard: string[] = [];
+      client.onSentListeners.add((sig) => heard.push(sig));
+      return { client, connection, heard };
+    }
+    const idOf = (tx: VersionedTransaction | Transaction) =>
+      utils.bytes.bs58.encode(
+        tx instanceof Transaction ? tx.signature! : tx.signatures[0],
+      );
+
+    it.each([
+      ["versioned", versioned],
+      ["legacy", () => new Transaction().add(transfer())],
+    ])(
+      "a %s send that throws carries the id it signed, and no listener hears it",
+      async (_name, build) => {
+        const { client, connection, heard } = listening();
+        connection.sendRawTransaction.mockRejectedValueOnce(
+          new Error("socket hang up"),
+        );
+        const tx = build();
+
+        const error = await client.sendAndConfirm(tx).catch((e) => e);
+
+        expect(error.message).toBe("socket hang up");
+        expect(error.unacknowledgedSignature).toBe(idOf(tx));
+        expect(heard).toEqual([]);
+      },
+    );
+
+    it("wraps a send that throws what is not an Error", async () => {
+      const { client, connection } = listening();
+      connection.sendRawTransaction.mockRejectedValueOnce("socket hang up");
+      const tx = versioned();
+
+      const error = await client.sendAndConfirm(tx).catch((e) => e);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toBe("socket hang up");
+      expect(error.unacknowledgedSignature).toBe(idOf(tx));
+    });
+
+    it("refuses an answer that names another transaction, and confirms nothing", async () => {
+      const { client, connection, heard } = listening();
+      connection.sendRawTransaction.mockResolvedValueOnce("another");
+      const tx = versioned();
+
+      const error = await client.sendAndConfirm(tx).catch((e) => e);
+
+      expect(error.message).toBe(
+        `The RPC answered the send of ${idOf(tx)} with the signature another, of another transaction`,
+      );
+      expect(error.unacknowledgedSignature).toBe(idOf(tx));
+      expect(heard).toEqual([]);
+      expect((client as any).confirmTransaction).not.toHaveBeenCalled();
+    });
+
+    it("tells the listeners the id once the RPC acknowledges it", async () => {
+      const { client, heard } = listening();
+      const tx = versioned();
+
+      const sig = await client.sendAndConfirm(tx);
+
+      expect(sig).toBe(idOf(tx));
+      expect(heard).toEqual([sig]);
+    });
   });
 });

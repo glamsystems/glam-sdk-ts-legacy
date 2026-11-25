@@ -1319,9 +1319,7 @@ class TxBuilder
   }
 }
 
-export class OrcaWhirlpoolsClient
-  implements ProtocolPolicyClient<WhirlpoolsPolicy>
-{
+export class OrcaWhirlpoolsClient implements ProtocolPolicyClient<WhirlpoolsPolicy> {
   readonly txBuilder: TxBuilder;
 
   public constructor(readonly base: BaseClient) {

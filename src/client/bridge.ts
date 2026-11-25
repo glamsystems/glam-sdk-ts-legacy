@@ -209,6 +209,12 @@ function appendU32Le(parts: Buffer[], value: number) {
 }
 
 function appendU64Le(parts: Buffer[], value: BN) {
+  // toArrayLike writes a negative BN's magnitude, so -1 would encode as 1.
+  if (value.isNeg()) {
+    throw new Error(
+      `${value} is negative, and a u64 field holds no negative value`,
+    );
+  }
   parts.push(value.toArrayLike(Buffer, "le", 8));
 }
 
@@ -268,10 +274,39 @@ function encodeLayerzeroOftV2SendData(args: {
 }
 
 /**
+ * Refuses the amounts no route makes valid: a negative amount or minimum, which the u64 encoding
+ * would carry as its magnitude, and a `minAmountLd` above the amount, as the program refuses a
+ * quote above the amount sent.
+ */
+function refuseInvalidLayerzeroOftAmounts(
+  sourceAmount: BN,
+  minAmountLd: BN | undefined,
+): void {
+  if (sourceAmount.isNeg()) {
+    throw new Error(
+      `The amount sent, ${sourceAmount}, is negative: an OFT send moves no negative amount`,
+    );
+  }
+  if (minAmountLd?.isNeg()) {
+    throw new Error(
+      `minAmountLd ${minAmountLd} is negative: an OFT send quotes no negative amount`,
+    );
+  }
+  if (minAmountLd?.gt(sourceAmount)) {
+    throw new Error(
+      `minAmountLd ${minAmountLd} is above the amount sent, ${sourceAmount}: the program refuses a quote above the amount`,
+    );
+  }
+}
+
+/**
  * The least amount an OFT send quotes the recipient: `minAmountLd` when given; else, under a
  * route's cost bound, the amount less floor(amount * maxCostBps / 10_000), the lowest quote the
  * program's check `(amount - quote) * 10_000 <= amount * maxCostBps` admits; else the profile's
- * default share of the amount; else the amount.
+ * default share of the amount; else the amount. A `minAmountLd` above the amount is refused, as
+ * the program refuses a quote above the amount sent, and so is one under the lowest quote a given
+ * cost bound admits, and a negative amount or minimum, which the u64 encoding would carry as its
+ * magnitude.
  */
 export function resolveLayerzeroOftMinAmountLd(args: {
   sourceAmount: BN;
@@ -280,14 +315,25 @@ export function resolveLayerzeroOftMinAmountLd(args: {
   /** The cost bound the live route sets on the send's chain. */
   maxCostBps?: number;
 }): BN {
+  refuseInvalidLayerzeroOftAmounts(args.sourceAmount, args.minAmountLd);
+  const lowestAdmitted =
+    args.maxCostBps === undefined
+      ? undefined
+      : args.sourceAmount.sub(
+          args.sourceAmount.muln(args.maxCostBps).divn(10_000),
+        );
+
   if (args.minAmountLd) {
+    if (lowestAdmitted !== undefined && args.minAmountLd.lt(lowestAdmitted)) {
+      throw new Error(
+        `minAmountLd ${args.minAmountLd} is under ${lowestAdmitted}, the lowest quote a cost bound of ${args.maxCostBps} bps admits for ${args.sourceAmount} sent: the program refuses a send that costs more than its route allows`,
+      );
+    }
     return args.minAmountLd;
   }
 
-  if (args.maxCostBps !== undefined) {
-    return args.sourceAmount.sub(
-      args.sourceAmount.muln(args.maxCostBps).divn(10_000),
-    );
+  if (lowestAdmitted !== undefined) {
+    return lowestAdmitted;
   }
 
   if (args.routeProfile.defaultMinAmountBps !== undefined) {
@@ -300,7 +346,10 @@ export function resolveLayerzeroOftMinAmountLd(args: {
 }
 
 async function sha256(bytes: Buffer): Promise<Buffer> {
-  return Buffer.from(await crypto.subtle.digest("SHA-256", bytes));
+  // A copy, because the digest takes a view over an ArrayBuffer and a Buffer may sit on a shared one.
+  return Buffer.from(
+    await crypto.subtle.digest("SHA-256", new Uint8Array(bytes)),
+  );
 }
 
 function getBridgeRegistryPda(
@@ -858,6 +907,78 @@ class TxBuilder extends BaseTxBuilder<BridgeClient> {
   }
 }
 
+/** The checked-in LayerZero OFT route profile of a send, or an error when none matches. */
+function requireLayerzeroOftRouteProfile(
+  bridge: BridgeClient,
+  params: {
+    sourceMint: PublicKey;
+    destinationChain: number;
+    providerProgram?: PublicKey;
+  },
+): LayerzeroOftRouteProfile {
+  const routeProfile = resolveCanonicalLayerzeroOftRouteProfile({
+    sourceMint: params.sourceMint,
+    destinationChain: params.destinationChain,
+    providerProgram: params.providerProgram,
+    cluster: bridge.base.cluster,
+  });
+  if (!routeProfile) {
+    throw new Error(
+      "No canonical LayerZero OFT route profile matched this send. Only the checked-in direct USDT0 route is supported by this builder.",
+    );
+  }
+  return routeProfile;
+}
+
+/**
+ * The least amount a send quotes the recipient, as its instruction carries it: see
+ * {@link resolveLayerzeroOftMinAmountLd}, under the limits of the live route with the send's
+ * mint, recipient and program on the send's chain (the chain's own limits, else the route's).
+ * Those limits refuse an amount outside their range and a `minAmountLd` under their cost bound,
+ * as the program would; no such route leaves the profile's default.
+ */
+async function resolveLayerzeroOftSendMinAmountLd(
+  bridge: BridgeClient,
+  routeProfile: LayerzeroOftRouteProfile,
+  params: {
+    sourceMint: PublicKey;
+    sourceAmount: BN;
+    destinationChain: number;
+    destinationRecipient: PublicKey;
+    minAmountLd?: BN;
+  },
+): Promise<BN> {
+  refuseInvalidLayerzeroOftAmounts(params.sourceAmount, params.minAmountLd);
+  const { live } = await bridge.fetchRouteSets(LAYERZERO_OFT_PROTOCOL);
+  const route = live?.find(
+    (candidate) =>
+      candidate.sourceMint.equals(params.sourceMint) &&
+      candidate.destinationRecipient.equals(params.destinationRecipient) &&
+      candidate.providerProgram.equals(routeProfile.providerProgram),
+  );
+  const chain = new BN(params.destinationChain);
+  const entry = route?.destinationChains.find((candidate) =>
+    candidate.chain.eq(chain),
+  );
+  const limits = route && entry ? (entry.limits ?? route.limits) : undefined;
+  if (limits && params.sourceAmount.lt(limits.minAmount)) {
+    throw new Error(
+      `The amount sent, ${params.sourceAmount}, is under ${limits.minAmount}, the least the live route sends on chain ${params.destinationChain}: the program refuses a smaller transfer`,
+    );
+  }
+  if (limits && params.sourceAmount.gt(limits.maxAmount)) {
+    throw new Error(
+      `The amount sent, ${params.sourceAmount}, is over ${limits.maxAmount}, the most the live route sends on chain ${params.destinationChain}: the program refuses a larger transfer`,
+    );
+  }
+  return resolveLayerzeroOftMinAmountLd({
+    sourceAmount: params.sourceAmount,
+    minAmountLd: params.minAmountLd,
+    routeProfile,
+    maxCostBps: limits?.maxCostBps,
+  });
+}
+
 /** The route surface one provider bit shares: the live and pending sets, and edits over them. */
 class BridgeProtocolRoutes {
   public constructor(
@@ -940,10 +1061,35 @@ class LayerzeroOftBridgeProtocolClient extends BridgeProtocolRoutes {
   }
 
   /**
+   * The least amount `send` quotes the recipient for these parameters, the value its
+   * instruction carries: `minAmountLd` when given, refused above the amount and under the live
+   * route's cost bound on the send's chain; else that cost bound; else the route profile's
+   * default. An amount outside the live route's range on that chain is refused.
+   */
+  async resolveMinAmountLd(
+    params: Pick<
+      LayerzeroOftSendParams,
+      | "sourceMint"
+      | "sourceAmount"
+      | "destinationChain"
+      | "destinationRecipient"
+      | "providerProgram"
+      | "minAmountLd"
+    >,
+  ): Promise<BN> {
+    return await resolveLayerzeroOftSendMinAmountLd(
+      this.bridge,
+      requireLayerzeroOftRouteProfile(this.bridge, params),
+      params,
+    );
+  }
+
+  /**
    * Without `minAmountLd` the quote concedes exactly the cost bound the live route of the send's
    * mint, recipient and program sets on its chain: the amount less
-   * floor(amount * maxCostBps / 10_000), the lowest quote the program admits. With no such live
-   * route on that chain it is the route profile's default, 99.5 % of the amount for USDT0.
+   * floor(amount * maxCostBps / 10_000), the lowest quote the program admits, and a
+   * `minAmountLd` under that quote is refused. With no such live route on that chain it is the
+   * route profile's default, 99.5 % of the amount for USDT0.
    */
   async send(
     params: LayerzeroOftSendParams,
@@ -1085,19 +1231,7 @@ export class BridgeClient {
     destinationChain: number;
     providerProgram?: PublicKey;
   }) {
-    const routeProfile = resolveCanonicalLayerzeroOftRouteProfile({
-      sourceMint: params.sourceMint,
-      destinationChain: params.destinationChain,
-      providerProgram: params.providerProgram,
-      cluster: this.base.cluster,
-    });
-    if (!routeProfile) {
-      throw new Error(
-        "No canonical LayerZero OFT route profile matched this send. Only the checked-in direct USDT0 route is supported by this builder.",
-      );
-    }
-
-    return routeProfile;
+    return requireLayerzeroOftRouteProfile(this, params);
   }
 
   private resolveLayerzeroOftNonceAccount(params: {
@@ -1185,34 +1319,6 @@ export class BridgeClient {
     ] satisfies AccountMeta[];
   }
 
-  /**
-   * The cost bound the live OFT routes set for a send on `destinationChain`: the chain's own
-   * limits, else its route's. Undefined when no live route has the send's mint, recipient and
-   * program, or that route does not list the chain: a send the program refuses.
-   */
-  private async liveLayerzeroOftMaxCostBps(params: {
-    sourceMint: PublicKey;
-    destinationRecipient: PublicKey;
-    providerProgram: PublicKey;
-    destinationChain: number;
-  }): Promise<number | undefined> {
-    const { live } = await this.fetchRouteSets(LAYERZERO_OFT_PROTOCOL);
-    const route = live?.find(
-      (candidate) =>
-        candidate.sourceMint.equals(params.sourceMint) &&
-        candidate.destinationRecipient.equals(params.destinationRecipient) &&
-        candidate.providerProgram.equals(params.providerProgram),
-    );
-    const chain = new BN(params.destinationChain);
-    const entry = route?.destinationChains.find((candidate) =>
-      candidate.chain.eq(chain),
-    );
-    if (!route || !entry) {
-      return undefined;
-    }
-    return (entry.limits ?? route.limits).maxCostBps;
-  }
-
   private async buildLayerzeroOftSendInstruction(params: {
     sourceMint: PublicKey;
     sourceAmount: BN;
@@ -1232,16 +1338,9 @@ export class BridgeClient {
       destinationChain: params.destinationChain,
       providerProgram: params.providerProgram,
     });
-    const [{ tokenProgram }, maxCostBps] = await Promise.all([
+    const [{ tokenProgram }, minAmountLd] = await Promise.all([
       fetchMintAndTokenProgram(this.base.connection, params.sourceMint),
-      params.minAmountLd
-        ? undefined
-        : this.liveLayerzeroOftMaxCostBps({
-            sourceMint: params.sourceMint,
-            destinationRecipient: params.destinationRecipient,
-            providerProgram: routeProfile.providerProgram,
-            destinationChain: params.destinationChain,
-          }),
+      resolveLayerzeroOftSendMinAmountLd(this, routeProfile, params),
     ]);
     const providerReceipt = this.resolveLayerzeroOftNonceAccount({
       routeProfile,
@@ -1275,12 +1374,7 @@ export class BridgeClient {
           dstEid: params.destinationChain,
           to: params.destinationRecipient,
           amountLd: params.sourceAmount,
-          minAmountLd: resolveLayerzeroOftMinAmountLd({
-            sourceAmount: params.sourceAmount,
-            minAmountLd: params.minAmountLd,
-            routeProfile,
-            maxCostBps,
-          }),
+          minAmountLd,
           options,
           composeMsg: params.composeMsg,
           nativeFee: params.nativeFee,

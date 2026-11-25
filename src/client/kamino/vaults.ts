@@ -124,15 +124,18 @@ class TxBuilder
     const reserves = vaultState.vaultAllocationStrategy.filter(
       ({ reserve }) => !reserve.equals(PublicKey.default),
     );
-    // Withdraw from the first reserve when kvault does not have enough liquidity
-    const idx = 0;
-    const withdrawReserve = (
-      await this.client.kaminoLending.fetchAndParseReserves(
-        reserves.map((r) => r.reserve),
-      )
-    )[idx];
-    const vaultCollateralTokenVault =
-      vaultState.vaultAllocationStrategy[idx].ctokenVault;
+    // Withdraw from the first reserve when kvault does not have enough
+    // liquidity: the reserve and its ctoken vault come from that one entry,
+    // which need not be the strategy's entry 0.
+    const withdrawAllocation = reserves[0];
+    if (!withdrawAllocation) {
+      throw new Error(`Kamino vault ${vault} has no reserve allocation`);
+    }
+    const [withdrawReserve] =
+      await this.client.kaminoLending.fetchAndParseReserves([
+        withdrawAllocation.reserve,
+      ]);
+    const vaultCollateralTokenVault = withdrawAllocation.ctokenVault;
 
     const remainingAccounts =
       await this.client.composeRemainingAccounts(reserves);
@@ -229,9 +232,7 @@ class TxBuilder
   }
 }
 
-export class KaminoVaultsClient
-  implements ProtocolPolicyClient<KaminoVaultsPolicy>
-{
+export class KaminoVaultsClient implements ProtocolPolicyClient<KaminoVaultsPolicy> {
   private vaultStates = new PkMap<KVaultState>();
   private shareMintToVaultPdaMap = new PkMap<PublicKey>();
   txBuilder: TxBuilder;

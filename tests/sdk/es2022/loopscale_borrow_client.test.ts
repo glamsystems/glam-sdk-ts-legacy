@@ -59,9 +59,7 @@ describe("LoopscaleBorrowClient under native class fields", () => {
     const next: PublicKey = Keypair.generate().publicKey;
     base.vaultPda = next;
     const second = borrow.getLoanPda(nonce);
-    expect(second.toBase58()).toBe(
-      getLoopscaleLoanPda(next, nonce).toBase58(),
-    );
+    expect(second.toBase58()).toBe(getLoopscaleLoanPda(next, nonce).toBase58());
     expect(second.equals(first)).toBe(false);
   });
 });

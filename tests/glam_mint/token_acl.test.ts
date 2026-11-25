@@ -319,7 +319,10 @@ describe("token_acl", () => {
     ).toBe("initialized");
 
     // Re-freeze bob via token_acl_freeze
-    const freezeTxSig = await glamClient.mint.tokenAclFreeze([bobAta], txOptions);
+    const freezeTxSig = await glamClient.mint.tokenAclFreeze(
+      [bobAta],
+      txOptions,
+    );
     console.log("ACL freeze bob:", freezeTxSig);
 
     expect(

@@ -67,9 +67,7 @@ export class DelegateAcl implements DelegateAclType {
 
 export type EmergencyAccessUpdateArgsType =
   IdlTypes<GlamProtocol>["emergencyAccessUpdateArgs"];
-export class EmergencyAccessUpdateArgs
-  implements EmergencyAccessUpdateArgsType
-{
+export class EmergencyAccessUpdateArgs implements EmergencyAccessUpdateArgsType {
   disabledIntegrations: PublicKey[];
   disabledDelegates: PublicKey[];
   stateEnabled: boolean | null;

@@ -50,6 +50,7 @@ import {
   LOOPSCALE_STRATEGY_ACCOUNT_DISCRIMINATOR,
   LOOPSCALE_VAULT_DISCRIMINATOR,
   LoopscaleLoan,
+  type LoopscaleLoanDuration,
   LoopscaleMarketInformation,
   LoopscaleStrategy,
   hasLoopscaleLoanDiscriminator,
@@ -123,13 +124,30 @@ const GLAM_UPDATE_STRATEGY_ACCOUNT_COUNT = 15;
 const MARKET_INFORMATION_DISCRIMINATOR = Buffer.from([
   194, 154, 190, 99, 64, 111, 37, 205,
 ]);
-const LOOPSCALE_STRATEGY_DURATION_BY_INDEX = [
+// The term each duration slot of a strategy stands for, as the Loopscale API
+// keys it. A ledger records the term of its slot in the same form.
+const LOOPSCALE_STRATEGY_DURATION_BY_INDEX: readonly LoopscaleLoanDuration[] = [
   { durationType: 0, duration: 1 }, // 0: 1 day
   { durationType: 1, duration: 1 }, // 1: 1 week
   { durationType: 2, duration: 1 }, // 2: 1 month
   { durationType: 2, duration: 3 }, // 3: 3 months
   { durationType: 4, duration: 1 }, // 4: 1 year
 ];
+
+/** The duration slot that stands for a term, or null where none does. */
+function loopscaleStrategyDurationIndex(
+  term: LoopscaleLoanDuration,
+): number | null {
+  const index = LOOPSCALE_STRATEGY_DURATION_BY_INDEX.findIndex(
+    ({ durationType, duration }) =>
+      durationType === term.durationType && duration === term.duration,
+  );
+  return index === -1 ? null : index;
+}
+
+function describeLoopscaleDuration(term: LoopscaleLoanDuration): string {
+  return `duration ${term.duration} of type ${term.durationType}`;
+}
 
 export type LoopscaleQuote = {
   apy: number;
@@ -184,8 +202,7 @@ export type LoopscaleApiTransactionResponse = LoopscaleApiTransaction & {
 };
 
 export type LoopscaleApiTransactionPayload =
-  | LoopscaleApiTransactionResponse
-  | LoopscaleApiTransactionPayload[];
+  LoopscaleApiTransactionResponse | LoopscaleApiTransactionPayload[];
 
 /**
  * Account inputs for a Loopscale borrow that are derived from on-chain market
@@ -195,6 +212,8 @@ export type BorrowMarketAccounts = {
   marketInformation: PublicKey;
   principalMint: PublicKey;
   durationIndex: number;
+  /** The term `durationIndex` stands for. */
+  duration: LoopscaleLoanDuration;
   assetIndexGuidance: Buffer;
 };
 
@@ -233,6 +252,8 @@ export type LoopscaleBorrowPrincipalTerms = {
   expectedLoanValues: LoopscaleExpectedLoanValues;
   assetIndexGuidance: Buffer;
   durationIndex: number;
+  /** The term `durationIndex` stands for. */
+  duration: LoopscaleLoanDuration;
 };
 
 export type LoopscaleBorrowQuoteTerms = LoopscaleBorrowPrincipalTerms & {
@@ -2205,12 +2226,17 @@ export class LoopscaleCoreClient {
 
   /**
    * Resolves the market-derived account inputs for a borrow: the asset index
-   * guidance and the strategy duration index that matches the quoted APY.
+   * guidance and the strategy's duration index. The index is the slot of
+   * `duration`, the term to borrow at, which must hold `expectedApy`. A term
+   * no slot stands for is refused. A strategy may lend several terms at one
+   * APY, so without a term the index is the slot that holds `expectedApy`
+   * only where no other slot holds it.
    */
   async resolveBorrowMarketAccounts(params: {
     strategy: PublicKey | LoopscaleStrategy;
     collateralMint: PublicKey;
     expectedApy: BN;
+    duration?: LoopscaleLoanDuration;
   }): Promise<BorrowMarketAccounts> {
     const strategyInfo =
       params.strategy instanceof PublicKey
@@ -2239,12 +2265,14 @@ export class LoopscaleCoreClient {
       strategyInfo,
       collateralAssetIndex,
       params.expectedApy,
+      params.duration,
     );
 
     return {
       marketInformation: strategyInfo.marketInformation,
       principalMint: strategyInfo.principalMint,
       durationIndex,
+      duration: { ...LOOPSCALE_STRATEGY_DURATION_BY_INDEX[durationIndex] },
       assetIndexGuidance: Buffer.from([
         collateralAssetIndex,
         principalAssetIndex,
@@ -2365,7 +2393,8 @@ export class LoopscaleCoreClient {
 
   /**
    * Resolves borrow terms for a known strategy and expected loan values, without
-   * consulting the quote API.
+   * consulting the quote API. `duration` is the term to borrow at: see
+   * {@link resolveBorrowMarketAccounts}.
    */
   async resolveBorrowTermsFromStrategy(params: {
     strategy: PublicKey | LoopscaleStrategy;
@@ -2373,6 +2402,7 @@ export class LoopscaleCoreClient {
     assetIdentifier: PublicKey;
     expectedApy: BN;
     expectedLqt: [number, number, number, number, number];
+    duration?: LoopscaleLoanDuration;
   }): Promise<LoopscaleBorrowPrincipalTerms> {
     const strategyInfo =
       params.strategy instanceof PublicKey
@@ -2389,11 +2419,12 @@ export class LoopscaleCoreClient {
       );
     }
 
-    const { assetIndexGuidance, durationIndex } =
+    const { assetIndexGuidance, durationIndex, duration } =
       await this.resolveBorrowMarketAccounts({
         strategy: strategyInfo,
         collateralMint: params.assetIdentifier,
         expectedApy: params.expectedApy,
+        duration: params.duration,
       });
 
     return {
@@ -2404,6 +2435,7 @@ export class LoopscaleCoreClient {
       },
       assetIndexGuidance,
       durationIndex,
+      duration,
     };
   }
 
@@ -2486,20 +2518,16 @@ export class LoopscaleCoreClient {
       0,
     ] as [number, number, number, number, number];
 
-    const terms = await this.resolveBorrowTermsFromStrategy({
+    // The slot is named by its term, so another slot at the same APY is not
+    // taken for it.
+    return await this.resolveBorrowTermsFromStrategy({
       strategy: strategyInfo,
       principalMint: params.principalMint,
       assetIdentifier: params.assetIdentifier,
       expectedApy,
       expectedLqt,
+      duration: LOOPSCALE_STRATEGY_DURATION_BY_INDEX[durationIndex],
     });
-    if (terms.durationIndex !== durationIndex) {
-      throw new Error(
-        `Strategy ${strategy} resolved duration index ${terms.durationIndex}, expected ${durationIndex}; duplicate APY terms cannot be disambiguated`,
-      );
-    }
-
-    return terms;
   }
 
   /**
@@ -2554,6 +2582,10 @@ export class LoopscaleCoreClient {
       assetIdentifier: params.assetIdentifier,
       expectedApy: new BN(String(quote.apy)),
       expectedLqt: [Number(quote.lqt), 0, 0, 0, 0],
+      duration: {
+        durationType: params.durationType,
+        duration: params.duration,
+      },
     });
 
     return { ...terms, quote };
@@ -2587,30 +2619,61 @@ export class LoopscaleCoreClient {
     return assetInfo;
   }
 
-  // The collateral map stores the lending APY per (asset, duration); the borrow
-  // instruction expects the duration *index*, which we recover by matching the
-  // quoted APY against the strategy's populated slots for the collateral.
+  // The collateral map stores the lending APY per (asset, duration slot), and
+  // the borrow instruction takes the slot's index. A strategy may lend several
+  // terms at one APY, so the slot is the one of the term asked for, and the
+  // APY is what that slot must hold. Without a term the slot is found by its
+  // APY, and only one slot may hold it.
   private requireDurationIndex(
     strategyInfo: LoopscaleStrategy,
     collateralAssetIndex: number,
     expectedApy: BN,
+    duration?: LoopscaleLoanDuration,
   ): number {
-    const index = strategyInfo.durationIndexForApy(
-      collateralAssetIndex,
-      expectedApy,
-    );
-    if (index !== null) {
-      return index;
-    }
+    const strategy = strategyInfo.getAddress();
+    const apys = strategyInfo.collateralMap[collateralAssetIndex] ?? [];
     const populated =
       strategyInfo.populatedDurationIndexes(collateralAssetIndex);
     if (populated.length === 0) {
       throw new Error(
-        `Strategy ${strategyInfo.getAddress()} has no collateral term for market asset index ${collateralAssetIndex}`,
+        `Strategy ${strategy} has no collateral term for market asset index ${collateralAssetIndex}`,
+      );
+    }
+    const slotTerm = (index: number) =>
+      `slot ${index} is ${describeLoopscaleDuration(LOOPSCALE_STRATEGY_DURATION_BY_INDEX[index])}`;
+
+    if (duration !== undefined) {
+      const term = describeLoopscaleDuration(duration);
+      const termIndex = loopscaleStrategyDurationIndex(duration);
+      if (termIndex === null) {
+        throw new Error(
+          `No duration slot of a Loopscale strategy stands for ${term}: ${LOOPSCALE_STRATEGY_DURATION_BY_INDEX.map((_, index) => slotTerm(index)).join(", ")}`,
+        );
+      }
+      if (!populated.includes(termIndex)) {
+        throw new Error(
+          `Strategy ${strategy} has no term of ${term} (duration slot ${termIndex}) for market asset index ${collateralAssetIndex} (populated slots: ${populated.join(", ")})`,
+        );
+      }
+      if (!apys[termIndex].eq(expectedApy)) {
+        throw new Error(
+          `Strategy ${strategy} lends ${term} (duration slot ${termIndex}) at APY ${apys[termIndex].toString()} for market asset index ${collateralAssetIndex}, not at the expected APY ${expectedApy.toString()}`,
+        );
+      }
+      return termIndex;
+    }
+
+    const matches = populated.filter((index) => apys[index].eq(expectedApy));
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    if (matches.length === 0) {
+      throw new Error(
+        `Strategy ${strategy} has no duration slot matching quote APY ${expectedApy.toString()} for market asset index ${collateralAssetIndex} (populated slots: ${populated.join(", ")})`,
       );
     }
     throw new Error(
-      `Strategy ${strategyInfo.getAddress()} has no duration slot matching quote APY ${expectedApy.toString()} for market asset index ${collateralAssetIndex} (populated slots: ${populated.join(", ")})`,
+      `Strategy ${strategy} lends at APY ${expectedApy.toString()} in ${matches.length} duration slots for market asset index ${collateralAssetIndex}, and no term was named: ${matches.map(slotTerm).join(", ")}`,
     );
   }
 

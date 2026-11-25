@@ -119,10 +119,7 @@ export async function resolveAddressLookupTableAccounts(
     unresolvedKeys,
   );
   const fetchedByKey = new PkMap<AddressLookupTableAccount>(
-    fetchedLookupTables.map((lookupTable) => [
-      lookupTable.key,
-      lookupTable,
-    ]),
+    fetchedLookupTables.map((lookupTable) => [lookupTable.key, lookupTable]),
   );
 
   return dedupedLookupTables.reduce<AddressLookupTableAccount[]>(

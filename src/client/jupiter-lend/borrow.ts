@@ -380,9 +380,7 @@ class TxBuilder
   }
 }
 
-export class JupiterBorrowClient
-  implements ProtocolPolicyClient<JupiterBorrowPolicy>
-{
+export class JupiterBorrowClient implements ProtocolPolicyClient<JupiterBorrowPolicy> {
   readonly txBuilder: TxBuilder;
 
   public constructor(

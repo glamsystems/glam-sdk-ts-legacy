@@ -48,9 +48,7 @@ export type LoopscaleVaultData = {
   accounts: DepositWithdrawUserVaultAccounts;
 };
 
-export class LoopscaleVaultClient
-  implements ProtocolPolicyClient<LoopscaleVaultPolicy>
-{
+export class LoopscaleVaultClient implements ProtocolPolicyClient<LoopscaleVaultPolicy> {
   readonly txBuilder: LoopscaleVaultTxBuilder;
 
   public constructor(private readonly core: LoopscaleCoreClient) {

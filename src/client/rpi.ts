@@ -20,6 +20,8 @@ import {
 } from "../constants";
 import { getGlobalConfigPda } from "../utils/glamPDAs";
 import { PkSet } from "../utils";
+import { RpiPolicy } from "../deser/integrationPolicies";
+import { RPI_PROTOCOL } from "../protocols";
 import { BaseClient, BaseTxBuilder, TxOptions } from "./base";
 import {
   collectKaminoReserveOracleOverrides,
@@ -32,8 +34,7 @@ type BufferLike32 = BufferLike;
 type BufferLike20 = BufferLike;
 
 export type RpiDenominationKindInput =
-  | { usd: Record<string, never> }
-  | { mint: Record<string, never> };
+  { usd: Record<string, never> } | { mint: Record<string, never> };
 
 export type RpiDenominationSpecInput = {
   denom: RpiDenominationKindInput;
@@ -41,8 +42,7 @@ export type RpiDenominationSpecInput = {
 };
 
 export type RpiRegisteredPositionTypeInput =
-  | { valued: Record<string, never> }
-  | { tokenized: Record<string, never> };
+  { valued: Record<string, never> } | { tokenized: Record<string, never> };
 
 export type RpiRegisteredSourceTypeInput =
   | { trusted: Record<string, never> }
@@ -50,8 +50,7 @@ export type RpiRegisteredSourceTypeInput =
   | { wormhole: Record<string, never> };
 
 export type RpiNativeCustodyKindInput =
-  | { splToken: Record<string, never> }
-  | { nativeSol: Record<string, never> };
+  { splToken: Record<string, never> } | { nativeSol: Record<string, never> };
 
 export type UpsertRegisteredPositionParams = {
   positionId: BufferLike32;
@@ -737,6 +736,15 @@ export class RpiClient {
       [Buffer.from(SEED_INTEGRATION_AUTHORITY)],
       this.base.extRpiProgram.programId,
     )[0];
+  }
+
+  /** The vault's RPI policy, or null when it stores none. */
+  async fetchPolicy(): Promise<RpiPolicy | null> {
+    return await this.base.fetchProtocolPolicy(
+      this.base.extRpiProgram.programId,
+      RPI_PROTOCOL,
+      RpiPolicy,
+    );
   }
 
   async fetchObservationState() {

@@ -548,9 +548,7 @@ class TxBuilder
   }
 }
 
-export class JupiterEarnClient
-  implements ProtocolPolicyClient<JupiterEarnPolicy>
-{
+export class JupiterEarnClient implements ProtocolPolicyClient<JupiterEarnPolicy> {
   readonly txBuilder: TxBuilder;
 
   public constructor(readonly base: BaseClient) {

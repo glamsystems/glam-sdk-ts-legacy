@@ -853,9 +853,7 @@ class TxBuilder
   }
 }
 
-export class KaminoLendingClient
-  implements ProtocolPolicyClient<KaminoLendingPolicy>
-{
+export class KaminoLendingClient implements ProtocolPolicyClient<KaminoLendingPolicy> {
   private reserves: PkMap<Reserve> = new PkMap();
   private obligations: PkMap<Obligation> = new PkMap();
   txBuilder: TxBuilder;

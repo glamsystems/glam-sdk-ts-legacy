@@ -1,4 +1,4 @@
-import { AnchorProvider, Wallet } from "@coral-xyz/anchor";
+import { AnchorProvider, Wallet, utils } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
@@ -8,6 +8,9 @@ import {
 } from "@solana/web3.js";
 import { BaseClient } from "../../src/client/base";
 import { ClusterNetwork } from "../../src/clientConfig";
+
+/** A signed transaction's id, its first signature. */
+const idOf = (tx: Transaction) => utils.bytes.bs58.encode(tx.signature!);
 
 describe("BaseClient transaction confirmation", () => {
   const savedEnvironment = {
@@ -39,7 +42,6 @@ describe("BaseClient transaction confirmation", () => {
     jest
       .spyOn(connection, "getLatestBlockhash")
       .mockResolvedValue(latestBlockhash);
-    jest.spyOn(connection, "sendRawTransaction").mockResolvedValue("txsig");
     const client = new BaseClient({
       provider: new AnchorProvider(connection, wallet, {}),
       cluster: ClusterNetwork.Devnet,
@@ -52,6 +54,10 @@ describe("BaseClient transaction confirmation", () => {
         lamports: 1,
       }),
     );
+    // The RPC answers with the transaction's own id once the wallet signed it.
+    jest
+      .spyOn(connection, "sendRawTransaction")
+      .mockImplementation(async () => idOf(tx));
     return { client, connection, latestBlockhash, tx };
   }
 
@@ -78,10 +84,10 @@ describe("BaseClient transaction confirmation", () => {
           return { context: { slot: 1 }, value: { err: null } };
         });
 
-      await expect(client.sendAndConfirm(tx)).resolves.toBe("txsig");
+      expect(await client.sendAndConfirm(tx)).toBe(idOf(tx));
 
       expect(confirm).toHaveBeenCalledWith(
-        { ...latestBlockhash, signature: "txsig" },
+        { ...latestBlockhash, signature: idOf(tx) },
         expectedCommitment,
       );
       expect(connection.commitment).toBe(connectionCommitment);
@@ -105,10 +111,10 @@ describe("BaseClient transaction confirmation", () => {
           },
         });
 
-      await expect(client.sendAndConfirm(tx)).resolves.toBe("txsig");
+      expect(await client.sendAndConfirm(tx)).toBe(idOf(tx));
 
       expect(status).toHaveBeenCalledTimes(1);
-      expect(status).toHaveBeenCalledWith("txsig");
+      expect(status).toHaveBeenCalledWith(idOf(tx));
     },
   );
 
@@ -176,7 +182,7 @@ describe("BaseClient transaction confirmation", () => {
       programLogs: [],
     });
 
-    expect(readback).toHaveBeenCalledWith("txsig", {
+    expect(readback).toHaveBeenCalledWith(idOf(tx), {
       commitment: "confirmed",
       maxSupportedTransactionVersion: 1,
     });

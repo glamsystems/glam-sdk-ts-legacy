@@ -13,7 +13,7 @@ import { createGlamClient } from "./utils";
 
 // Load environment variables from .env file
 // Make sure a `.env` file exists with required variables (see `.env.example`)
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const txOptions = {
   maxFeeLamports: 10_000,

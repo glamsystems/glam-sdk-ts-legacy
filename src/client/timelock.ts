@@ -109,9 +109,10 @@ export class TimelockClient {
       vTx = await this.txBuilder.applyStateTimelockTx(txOptions);
     } else if (
       StateAccountType.equals(accountType, StateAccountType.MINT) ||
-      StateAccountType.equals(accountType, StateAccountType.TOKENIZED_VAULT)
+      StateAccountType.hasRequestQueue(accountType)
     ) {
-      // For Mint or TokenizedVault types, apply mint timelock
+      // A mint, a tokenized vault or a single-asset vault: glam_mint applies
+      // the staged mint params and, through glam_protocol, the staged state.
       vTx = await this.txBuilder.applyMintTimelockTx(txOptions);
     } else {
       throw new Error(
