@@ -197,7 +197,9 @@ which `connection.simulateTransaction` takes with a `VersionedTransaction`
 only. Simulate a version 1 transaction as the `V1Transaction` that
 `client.intoVersionedTransaction()` returns, because `@solana/web3.js` 1.99.0
 cannot serialize a version 1 message. A simulation writes nothing, so its
-records are only a preview.
+records are only a preview. A simulation that fails returns its inner
+instructions too, so read records from one only when its `value.err` is
+`null`.
 
 ```ts
 import { BorshInstructionCoder, type IdlTypes, utils } from "@coral-xyz/anchor";
@@ -318,19 +320,27 @@ parent. The IDL type `transferCollateralChildToParentInstruction` is removed.
   throw for a farm with a withdrawal cooldown. They unstake and withdraw in
   one transaction, which such a farm refuses.
 - `client.kaminoFarm.parseFarmState` rejects with a `RangeError` for data
-  shorter than 7408 bytes, which 1.2.2 parsed.
+  shorter than 7528 bytes, which 1.2.2 parsed.
   `client.kaminoFarm.fetchAndParseFarmStates` rejects the same way when a
   listed address holds such an account, where 1.2.2 resolved with an entry for
   it. A farm account has 8336 bytes.
 - `client.sendAndConfirm` throws when the RPC answers a send with the
   signature of another transaction. A test double of `sendRawTransaction`
   must return the first signature of the transaction it was given. A value
-  that `sendRawTransaction` throws and that is not an `Error` is rethrown as
-  an `Error` with that text. All of this holds only when the first signature,
-  the fee payer's, is set once the wallet and the additional signers have
-  signed, which means present and not all zero. When it is not, the SDK does
-  not compare the answer of the RPC, and it rethrows what `sendRawTransaction`
-  threw as it is.
+  that `sendRawTransaction` throws and that is not an `Error`, or is an
+  `Error` of another realm, which fails `instanceof Error`, is rethrown as
+  an `Error` with that value as its `cause`, and with its `message` when
+  that is a string, its text otherwise, or a fixed text when it has none
+  that can be read. All of this holds only when the first signature, the fee
+  payer's, is set once the wallet and the additional signers have signed,
+  which means present and not all zero. When it is not, the SDK does not
+  compare the answer of the RPC, and it rethrows what `sendRawTransaction`
+  threw as it is, unless that carries an `unacknowledgedSignature`, such as
+  an earlier send's, or reading that property throws: then it throws a new
+  `Error` without the property, and with that value as its `cause`. The entry
+  on `unacknowledgedSignature` under "New in 1.3.0" lists the other cases
+  where it throws a new `Error` in place of the RPC's error, and how each new
+  `Error` takes its message.
 
 ### Kamino farm types
 
@@ -390,7 +400,20 @@ localnet mock programs `mock_layerzero_endpoint`, `mock_layerzero_oft` and
   retry. The SDK sets the property only when the first signature, the fee
   payer's, is set once the wallet and the additional signers have signed. An
   error without the property says nothing about whether the transaction was
-  sent.
+  sent. The property names only the transaction this call signed, and only
+  until the RPC acknowledges the send. When the SDK sets the property and
+  the RPC's error cannot take it, for example because it is frozen or,
+  reused by the RPC, already carries the signature of another transaction,
+  `client.sendAndConfirm` throws a new `Error` with the property in its
+  place. It does the same when the SDK sets the property and the RPC's error
+  is one it threw before, or one it replaced, and leaves that error as it was.
+  An error the SDK does not set the property for comes without it: in
+  place of one that carries it anyway, or whose property cannot be read, such
+  as a reused error thrown after the acknowledgement or when the first
+  signature is not set, `client.sendAndConfirm` throws a new `Error` without
+  it. Each new `Error` takes the original's `message` when that is a string,
+  its text otherwise, or a fixed text when it has none that can be read, and
+  has the original as its `cause`, which keeps any signature it carried.
 - The `ext_jupiter`, `ext_loopscale`, `ext_marginfi`, `ext_neutral`,
   `ext_orca`, `ext_phoenix` and `ext_rpi` IDLs have the pricing instructions
   named above.

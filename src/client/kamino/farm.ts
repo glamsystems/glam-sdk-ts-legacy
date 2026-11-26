@@ -325,13 +325,32 @@ export class KaminoFarmClient {
   }
 
   async parseFarmState(data: Buffer): Promise<ParsedFarmState> {
+    const rewardsOffset = 192;
+    const numRewards = 10;
+    const rewardSize = 704;
+    // After the rewards: num_reward_tokens and num_users, a u64 each, then
+    // total_staked_amount and the farm vault.
+    const totalStakedAmountOffset =
+      rewardsOffset + numRewards * rewardSize + 16;
+    const farmVaultOffset = totalStakedAmountOffset + 8;
+    // total_active_stake_scaled, a u128, 152 bytes after the farm vault.
+    const totalActiveStakeScaledOffset = farmVaultOffset + 152;
+    // locking_mode, locking_start_timestamp, locking_duration and
+    // locking_early_withdrawal_penalty_bps, u64s from 240 bytes after the
+    // farm vault.
+    const lockingOffset = farmVaultOffset + 240;
+    // The last field read, the penalty, ends here.
+    const end = lockingOffset + 4 * 8;
+    if (data.length < end) {
+      throw new RangeError(
+        `Kamino farm state data is ${data.length} bytes, but parseFarmState needs at least ${end}`,
+      );
+    }
+
     const globalConfig = new PublicKey(data.subarray(40, 72));
     const farmTokenMint = new PublicKey(data.subarray(72, 104));
     const farmTokenDecimals = new BN(data.subarray(104, 112), "le");
     const farmTokenProgram = new PublicKey(data.subarray(112, 144));
-    const rewardsOffset = 192;
-    const numRewards = 10;
-    const rewardSize = 704;
 
     const rewardsData = data.subarray(
       rewardsOffset,
@@ -370,15 +389,10 @@ export class KaminoFarmClient {
       return true;
     });
 
-    // After the rewards: num_reward_tokens and num_users, a u64 each, then
-    // total_staked_amount and the farm vault.
-    const totalStakedAmountOffset =
-      rewardsOffset + numRewards * rewardSize + 16;
     const totalStakedAmount = new BN(
       data.subarray(totalStakedAmountOffset, totalStakedAmountOffset + 8),
       "le",
     );
-    const farmVaultOffset = totalStakedAmountOffset + 8;
     const farmVault = new PublicKey(
       data.subarray(farmVaultOffset, farmVaultOffset + 32),
     );
@@ -386,8 +400,6 @@ export class KaminoFarmClient {
     // withdrawal_cooldown_period, a u32 just before total_active_stake_scaled.
     const timeUnit = data.readUInt8(farmVaultOffset + 104);
     const withdrawalCooldownPeriod = data.readUInt32LE(farmVaultOffset + 148);
-    // total_active_stake_scaled, a u128, 152 bytes after the farm vault.
-    const totalActiveStakeScaledOffset = farmVaultOffset + 152;
     const totalActiveStakeScaled = new BN(
       data.subarray(
         totalActiveStakeScaledOffset,
@@ -395,10 +407,6 @@ export class KaminoFarmClient {
       ),
       "le",
     );
-    // locking_mode, locking_start_timestamp, locking_duration and
-    // locking_early_withdrawal_penalty_bps, u64s from 240 bytes after the
-    // farm vault.
-    const lockingOffset = farmVaultOffset + 240;
     const lockingField = (index: number) =>
       new BN(
         data.subarray(lockingOffset + index * 8, lockingOffset + index * 8 + 8),

@@ -185,8 +185,110 @@ export type TokenAccount = {
 };
 
 /**
+ * Puts `signature` on `target` as `unacknowledgedSignature`, and says whether
+ * `target` then reads it back: an object that cannot take new properties
+ * refuses it, and so does one that already carries another id the SDK set.
+ * The property is read-only and cannot be redefined, even where other code
+ * had set one of that name, so the first id the SDK puts on an error stays.
+ */
+function setUnacknowledgedSignature(
+  target: object,
+  signature: string,
+): boolean {
+  try {
+    Object.defineProperty(target, "unacknowledgedSignature", {
+      value: signature,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+    return (
+      (target as { unacknowledgedSignature?: unknown })
+        .unacknowledgedSignature === signature
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** What `messageOf` gives when no text of a thrown value can be read. */
+const UNREADABLE_MESSAGE =
+  "An error with no readable message; the original is the cause";
+
+/**
+ * The text of a thrown value, and it never throws: its `message` when that is
+ * a string, else what `String()` gives, else its tag. A getter or a proxy can
+ * throw on a read, and `String()` throws for an object with no prototype.
+ */
+function messageOf(error: unknown): string {
+  try {
+    const message = (error as { message?: unknown } | null | undefined)
+      ?.message;
+    if (typeof message === "string") {
+      return message;
+    }
+  } catch {}
+  try {
+    return String(error);
+  } catch {}
+  try {
+    return Object.prototype.toString.call(error);
+  } catch {}
+  return UNREADABLE_MESSAGE;
+}
+
+/** Whether `value` is an object or a function, which `thrownBySend` takes. */
+function isObjectOrFunction(value: unknown): value is object {
+  return (
+    (typeof value === "object" && value !== null) || typeof value === "function"
+  );
+}
+
+/**
+ * What `sendAndConfirm` has thrown, and each original that `carrierOf`
+ * replaced with a new `Error`. The SDK puts the property on none of them
+ * afterwards, so none of them changes when the RPC throws it again for
+ * another send.
+ */
+const thrownBySend = new WeakSet<object>();
+
+/**
+ * A new `Error` with the message of `error` and `error` as its `cause`. An
+ * `error` that is an object or a function joins `thrownBySend`.
+ */
+function carrierOf(error: unknown): Error {
+  if (isObjectOrFunction(error)) {
+    thrownBySend.add(error);
+  }
+  const carrier = new Error(messageOf(error));
+  // What new Error(message, { cause }) sets; the SDK's lib is ES2020.
+  Object.defineProperty(carrier, "cause", {
+    value: error,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  return carrier;
+}
+
+/**
+ * Whether `value` is an `Error`; false when the check throws, as it does for
+ * a revoked proxy.
+ */
+function isError(value: unknown): value is Error {
+  try {
+    return value instanceof Error;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * `error`, carrying the id of a transaction the RPC did not acknowledge as
- * `unacknowledgedSignature`, when there is one.
+ * `unacknowledgedSignature`, when there is one. In that case an `Error` that
+ * cannot take the property or that is in `thrownBySend`, and a thrown value
+ * that is not an `Error`, come back as a new `Error` with a message taken
+ * from them, the property, and the original as `cause`.
  */
 function withUnacknowledgedSignature(
   error: unknown,
@@ -195,12 +297,42 @@ function withUnacknowledgedSignature(
   if (!signature) {
     return error;
   }
-  const carrier = error instanceof Error ? error : new Error(String(error));
-  Object.defineProperty(carrier, "unacknowledgedSignature", {
-    value: signature,
-    enumerable: false,
-  });
+  if (
+    isError(error) &&
+    !thrownBySend.has(error) &&
+    setUnacknowledgedSignature(error, signature)
+  ) {
+    return error;
+  }
+  const carrier = carrierOf(error);
+  setUnacknowledgedSignature(carrier, signature);
   return carrier;
+}
+
+/**
+ * `error`, unless it carries an `unacknowledgedSignature` other than
+ * `allowed`, the id it may carry: that of the transaction this call signed
+ * until the RPC acknowledges the send, and none after that or when that id
+ * could not be read. Such an error, and one whose property cannot be read,
+ * comes back as a new `Error` without the property, with a message taken from
+ * it and the original as `cause`.
+ */
+function withoutOtherSignature(
+  error: unknown,
+  allowed: string | null,
+): unknown {
+  if (!isObjectOrFunction(error)) {
+    return error;
+  }
+  let other: boolean;
+  try {
+    const carried = (error as { unacknowledgedSignature?: unknown })
+      .unacknowledgedSignature;
+    other = carried !== undefined && carried !== allowed;
+  } catch {
+    other = true;
+  }
+  return other ? carrierOf(error) : error;
 }
 
 /**
@@ -218,6 +350,20 @@ function firstSignature(tx: VersionedTransaction | Transaction): string | null {
     : null;
 }
 
+/**
+ * The type of `value` as text, when `value` is an `Event`; undefined for any
+ * other value, and when the check, the read or the conversion throws, as
+ * `instanceof` does for a revoked proxy.
+ */
+function webSocketEventType(value: unknown): string | undefined {
+  try {
+    if (typeof Event !== "undefined" && value instanceof Event) {
+      return `${value.type}`;
+    }
+  } catch {}
+  return undefined;
+}
+
 export class BaseClient {
   cluster: ClusterNetwork;
   provider: anchor.Provider;
@@ -226,10 +372,11 @@ export class BaseClient {
   jupiterApiClient?: JupiterApiClient;
   phoenixRiseClient?: PhoenixRiseClient;
   /**
-   * Each hears the id of a transaction `sendAndConfirm` sent, once the RPC
-   * acknowledges it. A send that throws before that carries the id of the
-   * transaction it signed as the error's `unacknowledgedSignature`: it may
-   * still land.
+   * Each hears the RPC's answer to a send of `sendAndConfirm`, once the RPC
+   * acknowledges it. When the signed transaction's first signature, its id,
+   * is present and not all zero, that answer is the id, and when the RPC does
+   * not acknowledge the send, the error carries the id as
+   * `unacknowledgedSignature`: the transaction may still land.
    */
   public onSentListeners = new Set<(sig: string) => void>();
   readonly staging: boolean;
@@ -749,10 +896,42 @@ export class BaseClient {
    *
    * Transactions are sent with preflight disabled because callers commonly
    * simulate while building compute-budget instructions.
+   *
+   * An error it throws carries `unacknowledgedSignature` only before the RPC
+   * acknowledges the send, and only with the id of the transaction this call
+   * signed. When the RPC throws that error again, or the `cause` the SDK gave
+   * it, the SDK leaves it as it is.
    */
   public async sendAndConfirm(
     tx: VersionedTransaction | Transaction,
     additionalSigners: Keypair[] = [],
+  ): Promise<TransactionSignature> {
+    // The id this send signed, once it is known, and whether the RPC has
+    // acknowledged the send. Whatever is thrown on the way, what this call
+    // throws carries no other transaction's id as `unacknowledgedSignature`,
+    // and none once the send is acknowledged.
+    const signed: { id: string | null; acknowledged: boolean } = {
+      id: null,
+      acknowledged: false,
+    };
+    try {
+      return await this.signSendAndConfirm(tx, additionalSigners, signed);
+    } catch (error) {
+      const thrown = withoutOtherSignature(
+        error,
+        signed.acknowledged ? null : signed.id,
+      );
+      if (isObjectOrFunction(thrown)) {
+        thrownBySend.add(thrown);
+      }
+      throw thrown;
+    }
+  }
+
+  private async signSendAndConfirm(
+    tx: VersionedTransaction | Transaction,
+    additionalSigners: Keypair[],
+    signed: { id: string | null; acknowledged: boolean },
   ): Promise<TransactionSignature> {
     const { rpcEndpoint: connRpcUrl, commitment } = this.connection;
     const txRpcUrl =
@@ -797,10 +976,12 @@ export class BaseClient {
     // And again on what is about to be sent.
     assertV1Envelope(signedTx, serializedTx);
 
-    // The id is the first signature, known before the send. When the RPC
-    // takes the transaction and its answer is lost, the send throws, and the
-    // error carries the id to check on chain before a retry.
+    // The id is the first signature, known before the send when the signed
+    // transaction carries it. When the RPC takes the transaction and its
+    // answer is lost, the send throws, and the error carries the id to check
+    // on chain before a retry.
     const signedSig = firstSignature(signedTx);
+    signed.id = signedSig;
 
     // skip simulation since we just did it to compute CUs
     // however this means that we need to reconstruct the error, if
@@ -823,6 +1004,7 @@ export class BaseClient {
         signedSig,
       );
     }
+    signed.acknowledged = true;
     this.notifySent(txSig);
 
     if (process.env.NODE_ENV === "development") {
@@ -889,11 +1071,14 @@ export class BaseClient {
           confirmationCommitment,
         );
       } catch (err) {
-        if (typeof Event !== "undefined" && err instanceof Event) {
+        const eventType = webSocketEventType(err);
+        if (eventType !== undefined) {
           throw new Error(
-            `WebSocket error during transaction confirmation: ${(err as Event).type}`,
+            `WebSocket error during transaction confirmation: ${eventType}`,
           );
         }
+        // Any other rejection, one that cannot be read included, reaches
+        // `sendAndConfirm` as it is.
         throw err;
       }
     }

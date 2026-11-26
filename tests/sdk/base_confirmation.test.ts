@@ -188,4 +188,59 @@ describe("BaseClient transaction confirmation", () => {
     });
     expect(connection.commitment).toBe("finalized");
   });
+
+  it("throws an Error naming the event's type when the WebSocket confirmation rejects with an Event", async () => {
+    const { client, connection, tx } = createClient();
+    jest
+      .spyOn(connection, "confirmTransaction")
+      .mockRejectedValue(new Event("error"));
+
+    await expect(client.sendAndConfirm(tx)).rejects.toThrow(
+      "WebSocket error during transaction confirmation: error",
+    );
+  });
+
+  it("throws a new Error with the rejection as its cause when the WebSocket confirmation rejects with a revoked proxy", async () => {
+    const { client, connection, tx } = createClient();
+    const { proxy, revoke } = Proxy.revocable(new Event("error"), {});
+    revoke();
+    jest.spyOn(connection, "confirmTransaction").mockRejectedValue(proxy);
+
+    const error = await client.sendAndConfirm(tx).catch((e) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe(
+      "An error with no readable message; the original is the cause",
+    );
+    expect(error.cause).toBe(proxy);
+    expect(
+      Object.prototype.hasOwnProperty.call(error, "unacknowledgedSignature"),
+    ).toBe(false);
+  });
+
+  it("rethrows the rejection as it is when the WebSocket confirmation rejects with an Event whose type cannot be read", async () => {
+    const { client, connection, tx } = createClient();
+    const event = Object.defineProperty(new Event("error"), "type", {
+      get() {
+        throw new TypeError("unreadable");
+      },
+    });
+    jest.spyOn(connection, "confirmTransaction").mockRejectedValue(event);
+
+    await expect(client.sendAndConfirm(tx)).rejects.toBe(event);
+  });
+
+  it("rethrows the rejection as it is when the WebSocket confirmation rejects with an Event whose type cannot be converted to text", async () => {
+    const { client, connection, tx } = createClient();
+    const event = Object.defineProperty(new Event("error"), "type", {
+      value: {
+        toString() {
+          throw new TypeError("unconvertible");
+        },
+      },
+    });
+    jest.spyOn(connection, "confirmTransaction").mockRejectedValue(event);
+
+    await expect(client.sendAndConfirm(tx)).rejects.toBe(event);
+  });
 });
