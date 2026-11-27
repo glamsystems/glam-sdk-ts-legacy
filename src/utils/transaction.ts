@@ -8,6 +8,7 @@ import {
   TransactionMessage,
   RpcResponseAndContext,
   SimulatedTransactionResponse,
+  type TransactionError,
 } from "@solana/web3.js";
 import { resolveErrorCode, extractFailedProgramId } from "../error";
 import {
@@ -18,14 +19,14 @@ import {
 } from "./messageV1";
 
 /**
- * Parses program logs to extract error message.
+ * The error the program logs name, or undefined where they name none.
  * Checks in order: Anchor "Error Message:", insufficient funds/lamports,
  * and custom program error codes (resolved via IDL when possible).
- * Returns "Unknown error" if no recognizable error pattern is found.
  */
-export function parseProgramLogs(logs: string[], staging: boolean): string {
-  if (logs.length === 0) return "Invalid program logs";
-
+function errorInProgramLogs(
+  logs: string[],
+  staging: boolean,
+): string | undefined {
   // Anchor "Error Message:" from program logs
   const errorMsgLog = logs.find((log) => log.includes("Error Message:"));
   if (errorMsgLog) {
@@ -56,7 +57,54 @@ export function parseProgramLogs(logs: string[], staging: boolean): string {
     }
   }
 
-  return "Unknown error";
+  return undefined;
+}
+
+/**
+ * Parses program logs to extract error message.
+ * Checks in order: Anchor "Error Message:", insufficient funds/lamports,
+ * and custom program error codes (resolved via IDL when possible).
+ * Returns "Unknown error" if no recognizable error pattern is found.
+ */
+export function parseProgramLogs(logs: string[], staging: boolean): string {
+  if (logs.length === 0) return "Invalid program logs";
+  return errorInProgramLogs(logs, staging) ?? "Unknown error";
+}
+
+/**
+ * What a failed transaction says of itself: the error its logs name, or,
+ * where they name none, the error its confirmation gave. That error holds the
+ * index of the failed instruction and, for a program's own error, its code.
+ * The code is not resolved to a name without logs, because the index of the
+ * outer instruction does not say which program raised it.
+ */
+export function failedTransactionMessage(
+  error: TransactionError,
+  logs: string[],
+  staging: boolean,
+): string {
+  const named = errorInProgramLogs(logs, staging);
+  if (named !== undefined) {
+    return named;
+  }
+  const whyNoName =
+    logs.length === 0
+      ? "The program logs were not available."
+      : "No error message was found in the program logs.";
+  const instructionError = (error as { InstructionError?: unknown } | null)
+    ?.InstructionError;
+  if (Array.isArray(instructionError) && instructionError.length === 2) {
+    const [index, detail] = instructionError as [unknown, unknown];
+    const code = (detail as { Custom?: unknown } | null)?.Custom;
+    const said =
+      typeof code === "number"
+        ? `custom program error: 0x${code.toString(16)} (${code})`
+        : typeof detail === "string"
+          ? detail
+          : JSON.stringify(detail);
+    return `Transaction failed at instruction ${index}: ${said}. ${whyNoName}`;
+  }
+  return `Transaction failed: ${JSON.stringify(error)}. ${whyNoName}`;
 }
 
 export const getSimulationResult = async (

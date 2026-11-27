@@ -60,7 +60,156 @@ export function comparePublicKeyArrays(
 }
 
 /**
- * Compare current and staged integrationAcls and return the differences
+ * A protocol whose policy glam_protocol reads differently from the staged
+ * integration list than from the live one: added, dropped, or with other
+ * bytes.
+ */
+export type ProtocolPolicyChange = {
+  integrationProgram: PublicKey;
+  /** The protocol's bit, one bit even where a stored policy holds several. */
+  protocolBitflag: number;
+  /** The protocol's name, or "Unknown" for a bit the SDK does not list. */
+  protocolName: string;
+  /** The bytes read from the live list, or null when it holds none. */
+  current: Buffer | null;
+  /** The bytes read from the staged list, or null when it holds none. */
+  staged: Buffer | null;
+};
+
+/**
+ * A list's entries by program, as glam_protocol reads them. Its
+ * `check_integration` accepts a protocol that any entry for the program
+ * enables, and its `get_protocol_policy` reads the policies of the first
+ * entry alone. So a program the list holds more than once is one entry here,
+ * with every entry's protocols and the first entry's policies.
+ */
+function entriesByProgram(
+  acls: IntegrationAcl[] | null,
+): PkMap<IntegrationAcl> {
+  const byProgram = new PkMap<IntegrationAcl>();
+  (acls || []).forEach((acl) => {
+    const first = byProgram.get(acl.integrationProgram);
+    byProgram.set(
+      acl.integrationProgram,
+      first
+        ? new IntegrationAcl({
+            ...first,
+            protocolsBitmask: first.protocolsBitmask | acl.protocolsBitmask,
+          })
+        : acl,
+    );
+  });
+  return byProgram;
+}
+
+/**
+ * The policy `get_protocol_policy` reads for a protocol: the first one whose
+ * bitflag holds the protocol's bit. A later policy for the bit is never read.
+ */
+function policyRead(
+  acl: IntegrationAcl | undefined,
+  protocolBit: number,
+): Buffer | null {
+  const policy = (acl?.protocolPolicies ?? []).find(
+    (entry) => (Number(entry.protocolBitflag) & protocolBit) !== 0,
+  );
+  return policy ? Buffer.from(policy.data) : null;
+}
+
+/** The protocol bits an entry stores a policy under, lowest first. */
+function policyBits(acl: IntegrationAcl | undefined): number[] {
+  const stored = (acl?.protocolPolicies ?? []).reduce(
+    (bits, policy) => bits | Number(policy.protocolBitflag),
+    0,
+  );
+  // A protocol bitflag is a u16.
+  return Array.from({ length: 16 }, (_, index) => 1 << index).filter(
+    (bit) => (stored & bit) !== 0,
+  );
+}
+
+function compareProtocolPolicies(
+  currentMap: PkMap<IntegrationAcl>,
+  stagedMap: PkMap<IntegrationAcl>,
+  staging: boolean,
+): ProtocolPolicyChange[] {
+  const changes: ProtocolPolicyChange[] = [];
+  const programs = new PkSet([...currentMap.pkKeys(), ...stagedMap.pkKeys()]);
+
+  programs.forEach((integrationProgram) => {
+    const current = currentMap.get(integrationProgram);
+    const staged = stagedMap.get(integrationProgram);
+    const bits = new Set([...policyBits(current), ...policyBits(staged)]);
+
+    [...bits]
+      .sort((a, b) => a - b)
+      .forEach((protocolBitflag) => {
+        const before = policyRead(current, protocolBitflag);
+        const after = policyRead(staged, protocolBitflag);
+        if (before && after && before.equals(after)) {
+          return;
+        }
+        changes.push({
+          integrationProgram,
+          protocolBitflag,
+          protocolName:
+            getProtocolNamesFromBitmask(
+              integrationProgram,
+              protocolBitflag,
+              staging,
+            )[0] || "Unknown",
+          current: before,
+          staged: after,
+        });
+      });
+  });
+
+  return changes;
+}
+
+/** Whether two lists store the same entries in the same order. */
+function storeTheSame(
+  current: IntegrationAcl[],
+  staged: IntegrationAcl[],
+): boolean {
+  return (
+    current.length === staged.length &&
+    current.every((acl, index) => {
+      const other = staged[index];
+      const policies = acl.protocolPolicies ?? [];
+      const others = other.protocolPolicies ?? [];
+      return (
+        acl.integrationProgram.equals(other.integrationProgram) &&
+        acl.protocolsBitmask === other.protocolsBitmask &&
+        policies.length === others.length &&
+        policies.every(
+          (policy, at) =>
+            Number(policy.protocolBitflag) ===
+              Number(others[at].protocolBitflag) &&
+            Buffer.from(policy.data).equals(Buffer.from(others[at].data)),
+        )
+      );
+    })
+  );
+}
+
+/**
+ * Compare current and staged integrationAcls and return the differences.
+ *
+ * `added`, `removed` and `modified` compare the integrations and the protocols
+ * each one enables. `policyChanges` compares the policy of every protocol on
+ * either list, so a staged change that only edits a policy, such as a mint's
+ * minimum subscription, shows there and nowhere else.
+ *
+ * Both follow glam_protocol's own lookups, which matters for a list that
+ * holds a program or a protocol's policy more than once: a protocol counts as
+ * enabled when any entry for its program enables it, and its policy is the
+ * first one for its bit in the program's first entry.
+ *
+ * `identical` says whether the two lists store the same entries in the same
+ * order. It is false with nothing else reported when they differ only in what
+ * those lookups never reach: the order of the entries, a policy behind
+ * another for the same bit, the policies of a program's later entry.
  */
 export function compareIntegrationAcls(
   current: IntegrationAcl[] | null,
@@ -76,6 +225,8 @@ export function compareIntegrationAcls(
     enabledProtocols: string[];
     disabledProtocols: string[];
   }>;
+  policyChanges: ProtocolPolicyChange[];
+  identical: boolean;
 } {
   const added: IntegrationAcl[] = [];
   const removed: IntegrationAcl[] = [];
@@ -87,15 +238,8 @@ export function compareIntegrationAcls(
     disabledProtocols: string[];
   }> = [];
 
-  const currentMap = new PkMap<IntegrationAcl>();
-  (current || []).forEach((acl) => {
-    currentMap.set(acl.integrationProgram, acl);
-  });
-
-  const stagedMap = new PkMap<IntegrationAcl>();
-  (staged || []).forEach((acl) => {
-    stagedMap.set(acl.integrationProgram, acl);
-  });
+  const currentMap = entriesByProgram(current);
+  const stagedMap = entriesByProgram(staged);
 
   // Find added integrations
   stagedMap.forEach((stagedAcl, integrationProgram) => {
@@ -146,7 +290,10 @@ export function compareIntegrationAcls(
     }
   });
 
-  return { added, removed, modified };
+  const policyChanges = compareProtocolPolicies(currentMap, stagedMap, staging);
+  const identical = storeTheSame(current || [], staged || []);
+
+  return { added, removed, modified, policyChanges, identical };
 }
 
 /**

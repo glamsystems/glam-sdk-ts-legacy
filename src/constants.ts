@@ -658,7 +658,25 @@ export const getProtocolNameByProgramAndBitflag = (staging: boolean) => {
 };
 
 /**
+ * The integration program a protocol name means where two programs share it.
+ *
+ * ext_cctp and ext_bridge both name a protocol "CCTP". Production runs
+ * ext_cctp and has no ext_bridge, so there the name is ext_cctp's. A staging
+ * vault bridges through ext_bridge, so there it is ext_bridge's.
+ */
+const SHARED_PROTOCOL_NAME_PROGRAM: Record<
+  string,
+  (staging: boolean) => PublicKey
+> = {
+  CCTP: (staging) =>
+    staging ? getExtBridgeProgramId(staging) : getExtCctpProgramId(staging),
+};
+
+/**
  * Protocol Name -> (Program ID, Bitflag)
+ *
+ * A name two programs share resolves by deployment, as
+ * `SHARED_PROTOCOL_NAME_PROGRAM` says.
  */
 export const getProgramAndBitflagByProtocolName = (staging: boolean) => {
   const mapping: Record<string, [string, string]> = {};
@@ -667,6 +685,13 @@ export const getProgramAndBitflagByProtocolName = (staging: boolean) => {
     ([programId, protocols]) => {
       Object.entries(protocols).forEach(([bitflag, protocol]) => {
         const name = protocol.name;
+        const sharedNameProgram = SHARED_PROTOCOL_NAME_PROGRAM[name];
+        if (
+          sharedNameProgram &&
+          sharedNameProgram(staging).toBase58() !== programId
+        ) {
+          return;
+        }
         mapping[name] = [programId, bitflag];
       });
     },

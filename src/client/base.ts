@@ -3,17 +3,24 @@ import { BN } from "@coral-xyz/anchor";
 import { AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import {
   AddressLookupTableAccount,
+  Commitment,
   Connection,
   Keypair,
   LAMPORTS_PER_SOL,
   PublicKey,
+  SignatureStatus,
   Transaction,
+  TransactionConfirmationStatus,
+  TransactionExpiredBlockheightExceededError,
   TransactionInstruction,
   TransactionMessage,
   TransactionSignature,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { getSimulationResult, parseProgramLogs } from "../utils/transaction";
+import {
+  failedTransactionMessage,
+  getSimulationResult,
+} from "../utils/transaction";
 import {
   computeBudgetInstructions,
   resolveComputeBudget,
@@ -245,22 +252,23 @@ function isObjectOrFunction(value: unknown): value is object {
 }
 
 /**
- * What `sendAndConfirm` has thrown, and each original that `carrierOf`
- * replaced with a new `Error`. The SDK puts the property on none of them
- * afterwards, so none of them changes when the RPC throws it again for
- * another send.
+ * What `sendAndConfirm` has thrown, each original that `carrierOf` replaced
+ * with a new `Error`, and each rejection a status poll has recorded for its
+ * timeout to carry. The SDK puts the property on none of them afterwards, so
+ * none of them changes when the RPC throws it again for another send.
  */
 const thrownBySend = new WeakSet<object>();
 
 /**
- * A new `Error` with the message of `error` and `error` as its `cause`. An
- * `error` that is an object or a function joins `thrownBySend`.
+ * A new `Error` with `error` as its `cause` and `message` as its message,
+ * which is that of `error` unless one is given. An `error` that is an object
+ * or a function joins `thrownBySend`.
  */
-function carrierOf(error: unknown): Error {
+function carrierOf(error: unknown, message: string = messageOf(error)): Error {
   if (isObjectOrFunction(error)) {
     thrownBySend.add(error);
   }
-  const carrier = new Error(messageOf(error));
+  const carrier = new Error(message);
   // What new Error(message, { cause }) sets; the SDK's lib is ES2020.
   Object.defineProperty(carrier, "cause", {
     value: error,
@@ -362,6 +370,116 @@ function webSocketEventType(value: unknown): string | undefined {
     }
   } catch {}
   return undefined;
+}
+
+/**
+ * Whether a confirmation was rejected because the block height passed the
+ * last one the blockhash is valid at. False for any other value, and when the
+ * check or the read throws.
+ */
+function isBlockHeightExpiry(value: unknown): boolean {
+  try {
+    return (
+      value instanceof TransactionExpiredBlockheightExceededError ||
+      (value as { name?: unknown } | null)?.name ===
+        "TransactionExpiredBlockheightExceededError"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** How long the polling confirmation waits, which its timeout states. */
+const POLLING_TIMEOUT_MS = 60_000;
+
+/** The pause between two status polls. */
+const POLLING_INTERVAL_MS = 1_000;
+
+/**
+ * What `promise` settles to where that is handled before `deadline`, a time
+ * of `performance.now()`, and null otherwise. An answer or a rejection that
+ * is handled at or after the deadline is dropped, whether or not the
+ * deadline's timer has fired: a busy event loop can run the timer late. The
+ * promise is left behind at the deadline, and the timer is cleared either
+ * way.
+ */
+async function before<T>(
+  deadline: number,
+  promise: Promise<T>,
+): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(
+      () => resolve(null),
+      Math.max(0, deadline - performance.now()),
+    );
+  });
+  try {
+    const settled = await Promise.race([promise, late]);
+    return performance.now() < deadline ? settled : null;
+  } catch (reason) {
+    if (performance.now() < deadline) {
+      throw reason;
+    }
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The confirmation statuses, lowest first. */
+const CONFIRMATION_STATUSES: TransactionConfirmationStatus[] = [
+  "processed",
+  "confirmed",
+  "finalized",
+];
+
+/** The confirmation status each commitment waits for, old names included. */
+const COMMITMENT_STATUS: Record<Commitment, TransactionConfirmationStatus> = {
+  processed: "processed",
+  recent: "processed",
+  confirmed: "confirmed",
+  single: "confirmed",
+  singleGossip: "confirmed",
+  finalized: "finalized",
+  max: "finalized",
+  root: "finalized",
+};
+
+/**
+ * The confirmation status a signature's status says. A node on older software
+ * leaves `confirmationStatus` out, and the count of confirmations says it
+ * then, as Agave's `TransactionStatus::satisfies_commitment` reads one: no
+ * count is rooted, which is finalized, a count above one is confirmed, and
+ * any other status says only that a bank processed the transaction.
+ */
+function confirmationStatusOf(
+  status: SignatureStatus,
+): TransactionConfirmationStatus {
+  if (status.confirmationStatus) {
+    return status.confirmationStatus;
+  }
+  if (status.confirmations === null) {
+    return "finalized";
+  }
+  return status.confirmations > 1 ? "confirmed" : "processed";
+}
+
+/**
+ * Whether a signature's confirmation status has reached a commitment. False
+ * for a status or a commitment this does not know.
+ */
+function statusReaches(
+  confirmationStatus: string | undefined,
+  commitment: Commitment,
+): boolean {
+  const reached = CONFIRMATION_STATUSES.indexOf(
+    confirmationStatus as TransactionConfirmationStatus,
+  );
+  const waitedFor = CONFIRMATION_STATUSES.indexOf(
+    COMMITMENT_STATUS[commitment],
+  );
+  return waitedFor >= 0 && reached >= waitedFor;
 }
 
 export class BaseClient {
@@ -1015,18 +1133,32 @@ export class BaseClient {
 
     // if the tx fails, throw an error including logs
     if (res.value.err) {
-      const errTx = await this.connection.getTransaction(txSig, {
-        commitment: "confirmed",
-        maxSupportedTransactionVersion: 1,
-      });
+      const errTx = await this.failedTransaction(txSig);
       const logs = errTx?.meta?.logMessages || [];
+      const rawError = errTx?.meta?.err ?? res.value.err;
       throw new GlamError(
-        parseProgramLogs(logs, this.staging),
-        errTx?.meta?.err ?? res.value.err,
+        failedTransactionMessage(rawError, logs, this.staging),
+        rawError,
         logs,
       );
     }
     return txSig;
+  }
+
+  /**
+   * The body of a transaction that failed, which holds its logs, or null
+   * where the read fails, as on a node that keeps no transaction history.
+   * The error then stands as the confirmation gave it, with no logs.
+   */
+  private async failedTransaction(txSig: string) {
+    try {
+      return await this.connection.getTransaction(txSig, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 1,
+      });
+    } catch {
+      return null;
+    }
   }
 
   private notifySent(txSig: string) {
@@ -1056,13 +1188,13 @@ export class BaseClient {
 
     if (useWebSocket) {
       const latestBlockhash = await this.blockhashWithCache.get();
+      const configuredCommitment = this.connection.commitment;
+      const confirmationCommitment =
+        configuredCommitment === undefined ||
+        configuredCommitment === "finalized"
+          ? "confirmed"
+          : configuredCommitment;
       try {
-        const configuredCommitment = this.connection.commitment;
-        const confirmationCommitment =
-          configuredCommitment === undefined ||
-          configuredCommitment === "finalized"
-            ? "confirmed"
-            : configuredCommitment;
         return await this.connection.confirmTransaction(
           {
             ...latestBlockhash,
@@ -1077,6 +1209,21 @@ export class BaseClient {
             `WebSocket error during transaction confirmation: ${eventType}`,
           );
         }
+        // web3.js reports this expiry from the block height alone, and reads
+        // the signature's status only once its websocket subscription is
+        // acknowledged. A transaction confirmed while the websocket was still
+        // connecting ends here, so the status is read once before the expiry
+        // is reported. The expiry stands when that read fails, and when the
+        // status has not reached the commitment the confirmation waited for.
+        if (isBlockHeightExpiry(err)) {
+          const outcome = await this.outcomeAfterExpiry(
+            txSig,
+            confirmationCommitment,
+          ).catch(() => null);
+          if (outcome) {
+            return outcome;
+          }
+        }
         // Any other rejection, one that cannot be read included, reaches
         // `sendAndConfirm` as it is.
         throw err;
@@ -1089,24 +1236,90 @@ export class BaseClient {
       );
     }
 
-    const maxRetries = 60;
-    const retryDelayMs = 1000;
-    for (let i = 0; i < maxRetries; i++) {
-      const status = await this.connection.getSignatureStatus(txSig);
-      if (
-        status?.value?.confirmationStatus === "confirmed" ||
-        status?.value?.confirmationStatus === "finalized" ||
-        status?.value?.err
-      ) {
-        return { value: { err: status.value.err } };
+    // The wait ends at the deadline, however long a status read takes.
+    const deadline = performance.now() + POLLING_TIMEOUT_MS;
+    // The last status read that was rejected, which the timeout names.
+    let rejected: { reason: unknown } | undefined;
+    while (performance.now() < deadline) {
+      // A read that fails is a poll with no answer. The transaction may have
+      // landed, and a later poll can say so.
+      const outcome = await before(
+        deadline,
+        this.signatureOutcome(txSig),
+      ).catch((reason) => {
+        // The timeout may carry this rejection as its cause. It joins
+        // thrownBySend now, so a send that throws the same object while this
+        // poll runs does not write its signature onto it.
+        if (isObjectOrFunction(reason)) {
+          thrownBySend.add(reason);
+        }
+        rejected = { reason };
+        return null;
+      });
+      if (outcome) {
+        return outcome;
       }
-      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      const left = deadline - performance.now();
+      if (left <= 0) {
+        break;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(POLLING_INTERVAL_MS, left)),
+      );
     }
 
-    const expiry = (maxRetries * retryDelayMs) / 1000;
-    throw new Error(
-      `Transaction confirmation timeout after ${expiry} seconds.`,
+    const timeout = `Transaction confirmation timeout after ${POLLING_TIMEOUT_MS / 1000} seconds.`;
+    if (!rejected) {
+      throw new Error(timeout);
+    }
+    throw carrierOf(
+      rejected.reason,
+      `${timeout} The last status read that was rejected said: ${messageOf(rejected.reason)}`,
     );
+  }
+
+  /**
+   * What the signature's status says of a transaction whose blockhash has
+   * expired: its outcome once the status has reached `commitment`, and null
+   * before that, as web3.js decides it after a durable nonce expires.
+   *
+   * The read searches the transaction history. Without that a node answers
+   * from its recent status cache alone, which a signature leaves after a
+   * bounded number of rooted slots, so a transaction that landed early can be
+   * finalized and have no status there by the time its blockhash expires.
+   *
+   * A node that keeps no transaction history rejects that read before it
+   * looks at its cache, so a rejected read is made again without the search.
+   */
+  private async outcomeAfterExpiry(
+    txSig: string,
+    commitment: Commitment,
+  ): Promise<{ value: { err: any } } | null> {
+    const status = await this.connection
+      .getSignatureStatus(txSig, { searchTransactionHistory: true })
+      .catch(() => this.connection.getSignatureStatus(txSig));
+    return status?.value &&
+      statusReaches(confirmationStatusOf(status.value), commitment)
+      ? { value: { err: status.value.err } }
+      : null;
+  }
+
+  /**
+   * What the signature's status says of a transaction that is confirmed,
+   * finalized or failed, and null while the status says none of these.
+   */
+  private async signatureOutcome(
+    txSig: string,
+  ): Promise<{ value: { err: any } } | null> {
+    const status = await this.connection.getSignatureStatus(txSig);
+    if (
+      status?.value &&
+      (statusReaches(confirmationStatusOf(status.value), "confirmed") ||
+        status.value.err)
+    ) {
+      return { value: { err: status.value.err } };
+    }
+    return null;
   }
 
   get connection(): Connection {

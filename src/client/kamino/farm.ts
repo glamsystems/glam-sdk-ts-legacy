@@ -472,13 +472,17 @@ export class KaminoFarmClient {
     )[0];
 
   /**
-   * Harvest rewards from Kamino farms
+   * Harvest rewards from Kamino farms.
+   *
+   * @param farmUserStates The vault's farm user states, the `pubkey` of each
+   *   entry `findAndParseFarmUserStates` returns for the vault. A farm state
+   *   or another vault's farm user state is left out.
    */
   public async harvest(
-    vaultFarmStates: PublicKey[],
+    farmUserStates: PublicKey[],
     txOptions: TxOptions = {},
   ): Promise<TransactionSignature> {
-    const tx = await this.txBuilder.harvestTx(vaultFarmStates, txOptions);
+    const tx = await this.txBuilder.harvestTx(farmUserStates, txOptions);
     return await this.base.sendAndConfirm(tx);
   }
 

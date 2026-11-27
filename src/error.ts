@@ -17,6 +17,13 @@ import {
 } from "./glamExports";
 import { JUPITER_PROGRAM_ID } from "./constants";
 
+/**
+ * The mark every `GlamError` carries, whichever copy of the SDK made it. The
+ * package's CommonJS entry and its ES module entry each hold their own copy
+ * of the class, and the global symbol registry gives both the same symbol.
+ */
+const GLAM_ERROR_MARK = Symbol.for("@glamsystems/glam-sdk/GlamError");
+
 export class GlamError extends Error {
   message: string;
   rawError: TransactionError | null | undefined;
@@ -31,6 +38,26 @@ export class GlamError extends Error {
     this.message = message;
     this.rawError = rawError;
     this.programLogs = programLogs;
+    // Not enumerable, so nothing that prints or serialises the error shows it.
+    Object.defineProperty(this, GLAM_ERROR_MARK, { value: true });
+  }
+}
+
+/**
+ * Whether `value` is a `GlamError`, of this copy of the SDK or of another
+ * copy loaded in the same process. `instanceof` knows this copy's class
+ * alone. An error from a copy older than the mark carries none and is not
+ * one here. A read that throws, as on a revoked proxy, gives false.
+ */
+export function isGlamError(value: unknown): value is GlamError {
+  try {
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      (value as Record<symbol, unknown>)[GLAM_ERROR_MARK] === true
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -129,6 +156,13 @@ export function resolveErrorCode(
 export function parseTxError(error: any): string {
   const raw = error?.message || error?.toString?.() || "";
   const msg: string = raw === "[object Object]" ? "" : raw;
+
+  // A GlamError is what the cluster said of a transaction that failed. Its
+  // message is not read for the signs of an RPC failure below: an error code
+  // such as 6503 holds "503". Another copy of the SDK may have made it.
+  if (isGlamError(error)) {
+    return msg || "Unknown error";
+  }
 
   // Transaction expired
   if (msg.includes("block height exceeded")) {

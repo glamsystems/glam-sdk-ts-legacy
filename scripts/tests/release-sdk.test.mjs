@@ -464,6 +464,12 @@ const RELEASE_SDK = join(SCRIPTS, "release-sdk.mjs");
 const REQUIRED = `require("${PACKAGE}")`;
 const IMPORTED = `import("${PACKAGE}/index.esm.js")`;
 const KEPT = "StateModel keeps every field its parent assigns";
+// What the check prints for a GlamError one entry made and the other reads.
+const shownBy = (reader, maker) =>
+  `${reader}: parseTxError displays a GlamError made by ${maker} as itself`;
+const UNAVAILABLE = "RPC service unavailable: try again shortly";
+const misreadBy = (reader, maker) =>
+  `${reader}: parseTxError displays a GlamError made by ${maker} as ${JSON.stringify(UNAVAILABLE)}, not as its own message`;
 // The fields the StateIdlModel constructor assigns, in the order the check
 // names them.
 const ASSIGNED = [
@@ -497,12 +503,45 @@ const REDECLARED = [
 ];
 const LOST = `StateModel lost ${REDECLARED.slice(0, 8).join(", ")}`;
 
+// How a miniature entry makes and reads a GlamError. An entry that marks its
+// errors with a symbol of the global registry and reads that mark agrees with
+// every other copy. One that reads by its own constructor knows only its own
+// errors.
+const ERRORS = {
+  marked: { marks: true, reads: "error?.[MARK] === true" },
+  byConstructor: { marks: false, reads: "error instanceof GlamError" },
+  readsMarkOnly: { marks: false, reads: "error?.[MARK] === true" },
+};
+const errorExports = ({ marks, reads }) => `
+const MARK = Symbol.for("miniature-sdk/GlamError");
+class GlamError extends Error {
+  constructor(message, rawError, programLogs) {
+    super(message);
+    this.rawError = rawError;
+    this.programLogs = programLogs;${
+      marks
+        ? `
+    Object.defineProperty(this, MARK, { value: true });`
+        : ""
+    }
+  }
+}
+function parseTxError(error) {
+  const message = error?.message ?? "";
+  if (${reads}) return message;
+  return message.includes("503") ? ${JSON.stringify(UNAVAILABLE)} : message;
+}
+`;
+
 // One entry of a miniature SDK. A field in `redeclared` is a class field of
 // the subclass: it is defined after super() returns, which resets what the
 // parent's constructor assigned. The subclass constructor assigns three
-// fields itself, as the SDK's does, unless `reassigns` is false.
-function entry(format, redeclared = [], reassigns = true) {
-  const body = `
+// fields itself, as the SDK's does, unless `reassigns` is false. `errors`
+// names how it makes and reads a GlamError, or is null for an entry that
+// exports neither the class nor parseTxError.
+function entry(format, redeclared = [], reassigns = true, errors = "marked") {
+  const names = `StateModel, StateAccountType${errors ? ", GlamError, parseTxError" : ""}`;
+  const body = `${errors ? errorExports(ERRORS[errors]) : ""}
 class StateIdlModel {
   constructor(data) {
     for (const field of ${JSON.stringify(ASSIGNED)})
@@ -528,8 +567,8 @@ const StateAccountType = {
 };
 `;
   return format === "cjs"
-    ? `require("bundle-dependency");${body}module.exports = { StateModel, StateAccountType };\n`
-    : `import "bundle-dependency";${body}export { StateModel, StateAccountType };\n`;
+    ? `require("bundle-dependency");${body}module.exports = { ${names} };\n`
+    : `import "bundle-dependency";${body}export { ${names} };\n`;
 }
 
 // A built package root: both entries, the files a release must pack, the
@@ -609,6 +648,15 @@ test("the bundle check passes a packed bundle whose StateModel keeps its inherit
   assert.equal(result.status, 0, result.stderr);
   assert.ok(result.stdout.includes(`${REQUIRED}: ${KEPT}\n`), result.stdout);
   assert.ok(result.stdout.includes(`${IMPORTED}: ${KEPT}\n`), result.stdout);
+  // Each entry reads the other's GlamError.
+  assert.ok(
+    result.stdout.includes(`${shownBy(IMPORTED, REQUIRED)}\n`),
+    result.stdout,
+  );
+  assert.ok(
+    result.stdout.includes(`${shownBy(REQUIRED, IMPORTED)}\n`),
+    result.stdout,
+  );
   // The scratch consumer and its tarball are gone.
   assert.deepEqual(readdirSync(join(root, ".build")), ["types"]);
 });
@@ -629,12 +677,75 @@ for (const [format, label, broken, intact] of [
       result.stderr,
     );
     assert.ok(!result.stderr.includes(`${intact}: `), result.stderr);
-    assert.equal(result.stdout, `${intact}: ${KEPT}\n`);
+    // The other entry is sound, and each still reads the other's GlamError.
+    assert.equal(
+      result.stdout,
+      `${intact}: ${KEPT}\n${shownBy(REQUIRED, IMPORTED)}\n${shownBy(IMPORTED, REQUIRED)}\n`,
+    );
     assert.match(
       result.stderr,
       /glamsystems-glam-sdk-1\.2\.0\.tgz fails the bundle check\./,
     );
   });
+
+// The two entries hold their own copy of every class. An application can load
+// both, and then one entry's parseTxError reads the other's GlamError.
+test("the bundle check refuses entries whose parseTxError knows a GlamError by its own constructor", (t) => {
+  const root = builtPackage(t, {
+    cjs: entry("cjs", [], true, "byConstructor"),
+    esm: entry("esm", [], true, "byConstructor"),
+  });
+  const result = run(process.execPath, [CHECK_BUNDLE], root);
+  assert.equal(result.status, 1, result.stdout);
+  assert.ok(
+    result.stderr.includes(`${misreadBy(IMPORTED, REQUIRED)}\n`),
+    result.stderr,
+  );
+  assert.ok(
+    result.stderr.includes(`${misreadBy(REQUIRED, IMPORTED)}\n`),
+    result.stderr,
+  );
+  // Each entry is sound on its own.
+  assert.equal(result.stdout, `${REQUIRED}: ${KEPT}\n${IMPORTED}: ${KEPT}\n`);
+  assert.match(
+    result.stderr,
+    /glamsystems-glam-sdk-1\.2\.0\.tgz fails the bundle check\./,
+  );
+});
+
+test("the bundle check names the direction in which a GlamError is not read", (t) => {
+  // The ES module entry reads the mark and puts none on its own errors.
+  const root = builtPackage(t, {
+    esm: entry("esm", [], true, "readsMarkOnly"),
+  });
+  const result = run(process.execPath, [CHECK_BUNDLE], root);
+  assert.equal(result.status, 1, result.stdout);
+  assert.ok(
+    result.stderr.includes(`${misreadBy(REQUIRED, IMPORTED)}\n`),
+    result.stderr,
+  );
+  assert.ok(!result.stderr.includes(`${IMPORTED}: `), result.stderr);
+  assert.ok(
+    result.stdout.includes(`${shownBy(IMPORTED, REQUIRED)}\n`),
+    result.stdout,
+  );
+});
+
+test("the bundle check refuses an entry that exports no GlamError or no parseTxError", (t) => {
+  const root = builtPackage(t, { cjs: entry("cjs", [], true, null) });
+  const result = run(process.execPath, [CHECK_BUNDLE], root);
+  assert.equal(result.status, 1, result.stdout);
+  assert.ok(
+    result.stderr.includes(
+      `${REQUIRED}: GlamError or parseTxError is not exported\n`,
+    ),
+    result.stderr,
+  );
+  // No pair is read where one side lacks them.
+  assert.ok(!result.stderr.includes("displays a GlamError"), result.stderr);
+  assert.ok(!result.stdout.includes("displays a GlamError"), result.stdout);
+  assert.equal(result.stdout, `${REQUIRED}: ${KEPT}\n${IMPORTED}: ${KEPT}\n`);
+});
 
 test("the bundle check compares every field the parent assigns", (t) => {
   // Every field declared again and none reassigned: all thirteen are lost.

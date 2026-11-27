@@ -13,6 +13,12 @@
 // assigns. A build that applies define semantics to class fields resets the
 // fields a subclass declares again, and the entry still loads and still
 // exports every name.
+//
+// Each entry must also read the other's GlamError. The two entries hold their
+// own copy of every class, and an application can load both. An entry that
+// knows a GlamError by its own constructor reads the other's as any error,
+// and parseTxError then displays a program error code that holds "503" as an
+// unavailable RPC.
 import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
@@ -74,6 +80,28 @@ function findings({ StateModel, StateAccountType }) {
   return found;
 }
 
+// The message of a failed transaction whose error code holds "503", which
+// parseTxError reads as an unavailable RPC in any error but a GlamError.
+const FAILURE =
+  "Transaction failed at instruction 2: custom program error: 0x1967 (6503). The program logs were not available.";
+
+// What is wrong with how one entry reads a GlamError the other made, as a
+// sentence; null when its parseTxError displays the error as itself.
+function misreading(parseTxError, GlamError, maker) {
+  const made = `a GlamError made by ${maker}`;
+  let shown;
+  try {
+    shown = parseTxError(
+      new GlamError(FAILURE, { InstructionError: [2, { Custom: 6503 }] }, []),
+    );
+  } catch (error) {
+    return `parseTxError threw on ${made}: ${error?.message ?? error}`;
+  }
+  return shown === FAILURE
+    ? null
+    : `parseTxError displays ${made} as ${JSON.stringify(shown)}, not as its own message`;
+}
+
 function pack(root, destination) {
   const [{ filename }] = JSON.parse(
     execFileSync(
@@ -122,10 +150,14 @@ try {
     [`import("${name}/index.esm.js")`]: () =>
       import(pathToFileURL(join(directory, "index.esm.js")).href),
   };
+  // The entries that loaded, each with what it exports.
+  const loaded = [];
   for (const [entry, load] of Object.entries(entries)) {
     let found;
     try {
-      found = findings(await load());
+      const exported = await load();
+      loaded.push([entry, exported]);
+      found = findings(exported);
     } catch (error) {
       found = [`could not be checked: ${error?.stack ?? error}`];
     }
@@ -134,6 +166,27 @@ try {
       console.log(`${entry}: StateModel keeps every field its parent assigns`);
     else failed = true;
   }
+  // Each entry that loaded reads a GlamError of every other one.
+  const readers = loaded.filter(([entry, { GlamError, parseTxError }]) => {
+    if (typeof GlamError === "function" && typeof parseTxError === "function")
+      return true;
+    console.error(`${entry}: GlamError or parseTxError is not exported`);
+    failed = true;
+    return false;
+  });
+  for (const [reader, { parseTxError }] of readers)
+    for (const [maker, { GlamError }] of readers) {
+      if (maker === reader) continue;
+      const finding = misreading(parseTxError, GlamError, maker);
+      if (finding === null)
+        console.log(
+          `${reader}: parseTxError displays a GlamError made by ${maker} as itself`,
+        );
+      else {
+        console.error(`${reader}: ${finding}`);
+        failed = true;
+      }
+    }
 } finally {
   rmSync(consumer, { recursive: true, force: true });
 }

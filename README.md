@@ -19,6 +19,31 @@ releases contain fixes. Breaking changes are identified in the release notes.
 Pin an exact SDK version and read those notes before upgrading. A range such
 as `^1.1.2` can accept a breaking minor release.
 
+## Upgrading from 1.3.0
+
+### The protocol name `CCTP` resolves by deployment
+
+`ext_cctp` and `ext_bridge` both name a protocol `CCTP`, and no other protocol
+name is shared. `getProgramAndBitflagByProtocolName(false)["CCTP"]` now gives
+`ext_cctp`'s program id, which is the program production runs and the one
+`client.cctp` calls. Every release from 1.1.2 to 1.3.0 gave `ext_bridge`'s for
+both deployments. `getProgramAndBitflagByProtocolName(true)["CCTP"]` still
+gives `ext_bridge`'s.
+
+`parsePermissionNames` follows it. With `staging: false` and the protocol name
+`CCTP` it takes `Transfer` and throws for `ext_bridge`'s permissions. 1.1.2 to
+1.3.0 took `ext_bridge`'s, which are `Send`, `Validate` and `Settle`, and from
+1.2.0 also `Pause`, and threw for `Transfer`.
+
+`getProtocolsAndPermissions` is unchanged. Both programs keep the name, so
+`parseProtocolsBitmask` and `parseProtocolPermissionsBitmask` return `CCTP` for
+either program.
+
+A production vault on which 1.1.2 to 1.3.0 resolved the name can list
+`ext_bridge`'s protocol, or hold a delegate grant on it. Code that passes the
+program id, such as `client.access.disableProtocols` and
+`client.access.revokeDelegatePermissions`, reaches both programs as before.
+
 ## Upgrading to 1.3.0
 
 1.3.0 is a minor release with breaking changes. Each entry says which 1.2.2
